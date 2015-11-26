@@ -1,0 +1,124 @@
+\documentclass{article}
+\usepackage[spanish]{babel}
+\usepackage[onehalfspacing]{setspace}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{fullpage}
+\usepackage{color}
+\usepackage{fancyvrb}
+\usepackage{hyperref}
+\hypersetup{%
+	pdfborder = {0 0 0}
+}
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+
+\lstset{ %
+	backgroundcolor=\color{white},   % choose the background color; you must add \usepackage{color} or \usepackage{xcolor}
+	basicstyle=\footnotesize,        % the size of the fonts that are used for the code
+	breakatwhitespace=false,         % sets if automatic breaks should only happen at whitespace
+	breaklines=true,                 % sets automatic line breaking
+	captionpos=b,                    % sets the caption-position to bottom
+	commentstyle=\color{mygreen},    % comment style
+	frame=single,                    % adds a frame around the code
+	keepspaces=true,                 % keeps spaces in text, useful for keeping indentation of code (possibly needs columns=flexible)
+	numbers=left,                    % where to put the line-numbers; possible values are (none, left, right)
+	numbersep=5pt,                   % how far the line-numbers are from the code
+	numberstyle=\tiny\color{mygray}, % the style that is used for the line-numbers
+	rulecolor=\color{black},         % if not set, the frame-color may be changed on line-breaks within not-black text (e.g. comments (green here))
+	showspaces=false,                % show spaces everywhere adding particular underscores; it overrides 'showstringspaces'
+	showstringspaces=false,          % underline spaces within strings only
+	showtabs=false,                  % show tabs within strings adding particular underscores
+	stepnumber=1,                    % the step between two line-numbers. If it's 1, each line will be numbered
+	stringstyle=\color{mymauve},     % string literal style
+	tabsize=4,
+	title=\lstname                   % show the filename of files included with \lstinputlisting; also try caption instead of title
+}
+
+
+\author{José Luis Cánovas Sánchez\\joseluis.canovas2@um.es\\48636907A}
+\title{ARQUITECTURAS DE REDES AVANZADAS\\PRÁCTICA 2\\Balanceo de Carga con SDN\\ ENERO 2015}
+\date{}
+\begin{document}
+\maketitle
+
+\begin{abstract}
+
+\end{abstract}
+
+\tableofcontents
+
+\section{Introducción}
+
+\section{Topología mininet}
+
+
+\section{Controlador POX con l2\_learning}
+
+
+\begin{BVerbatim}
+$sudo mn --custom topo.py --topo mytopo --controller remote --test pingall
+	*** Creating network
+	*** Adding controller
+	*** Adding hosts:
+	cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+	*** Adding switches:
+	s1 s2
+	*** Adding links:
+	(cli_1, s1) (cli_2, s1) (cli_3, s1) (cli_4, s1) (cli_5, s1) (cli_6, s1) (s1, s2) (srv_1, s2) (srv_2, s2) (srv_3, s2) (srv_4, s2)
+	*** Configuring hosts
+	cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+	*** Starting controller
+	c0
+	*** Starting 2 switches
+	s1 s2 ...
+	*** Waiting for switches to connect
+	s1 s2
+	*** Ping: testing ping reachability
+	cli_1 -> cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+	cli_2 -> cli_1 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+	cli_3 -> cli_1 cli_2 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+	cli_4 -> cli_1 cli_2 cli_3 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+	cli_5 -> cli_1 cli_2 cli_3 cli_4 cli_6 srv_1 srv_2 srv_3 srv_4
+	cli_6 -> cli_1 cli_2 cli_3 cli_4 cli_5 srv_1 srv_2 srv_3 srv_4
+	srv_1 -> cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_2 srv_3 srv_4
+	srv_2 -> cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_3 srv_4
+	srv_3 -> cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_4
+	srv_4 -> cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3
+	*** Results: 0\% dropped (90/90 received)
+	*** Stopping 1 controllers
+	c0
+	*** Stopping 11 links
+	...........
+	*** Stopping 2 switches
+	s1 s2
+	*** Stopping 10 hosts
+	cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+	*** Done
+	completed in 6.529 seconds
+\end{BVerbatim}
+
+\section{Construcción del balanceador de carga}
+
+\subsection{Módulo de balanceo en POX}
+
+\subsection{Modificación topología}
+
+\subsection{Ejecución y prueba de PING}
+
+\subsection{Tráfico y flujos}
+
+
+\begin{thebibliography}{99}
+
+
+\end{thebibliography}
+
+
+\end{document}
