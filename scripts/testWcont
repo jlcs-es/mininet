@@ -1,0 +1,4 @@
+#!/bin/bash
+
+mn --custom $1 --topo mytopo --controller remote ${@:2}
+
