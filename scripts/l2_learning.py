@@ -98,7 +98,7 @@ class LearningSwitch (object):
 
 
   def roundRobin(self):
-    rr = (self.round_robin%self.max_srvs) + self.first_prt
+    rr = (self.round_robin%self.max_srvs) + self.frst_prt
     self.round_robin+=1
     return rr
 
@@ -160,12 +160,19 @@ class LearningSwitch (object):
         drop() # 2a
         return
 
-        # Round-Robin
-    switch = dpid_to_str(event.dpid)
-    if switch == "00-00-00-00-00-02" and packet.type == packet.ARP_TYPE and packet.payload.opcode == arp.REQUEST and packet.next.protodst == "10.0.0.101":
-      log.warning("PLS kill me")
-      #TODO: round-robin.
-      
+    # Round-Robin
+    if ( dpid_to_str(event.dpid) == "00-00-00-00-00-02" and
+                         packet.type == packet.ARP_TYPE and
+                   packet.payload.opcode == arp.REQUEST and
+                      packet.next.protodst == "10.0.0.101" ):
+      msg = of.ofp_flow_mod()
+      msg.match.dl_src = packet.src
+      msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
+      #msg.idle_timeout = 10
+      #msg.hard_timeout = 30
+      msg.data = event.ofp
+      self.connection.send(msg)
+      return
 
 
     if packet.dst.is_multicast:
@@ -219,3 +226,4 @@ def launch (transparent=False, hold_down=_flood_delay):
     raise RuntimeError("Expected hold-down to be a number")
 
   core.registerNew(l2_learning, str_to_bool(transparent))
+

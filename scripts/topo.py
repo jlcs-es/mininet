@@ -22,9 +22,9 @@ class MyTopo (Topo):
 
         # Add servers
         s1 = self.addHost('srv_1', ip='10.0.0.101', mac='00:00:00:00:01:01')
-        s2 = self.addHost('srv_2', ip='10.0.0.102', mac='00:00:00:00:01:02')
-        s3 = self.addHost('srv_3', ip='10.0.0.103', mac='00:00:00:00:01:03')
-        s4 = self.addHost('srv_4', ip='10.0.0.104', mac='00:00:00:00:01:04')
+        s2 = self.addHost('srv_2', ip='10.0.0.101', mac='00:00:00:00:01:02')
+        s3 = self.addHost('srv_3', ip='10.0.0.101', mac='00:00:00:00:01:03')
+        s4 = self.addHost('srv_4', ip='10.0.0.101', mac='00:00:00:00:01:04')
 
         # Add links
         self.addLink(sw_clients, sw_servers, port2=1)
