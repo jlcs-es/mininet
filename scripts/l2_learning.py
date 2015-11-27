@@ -22,6 +22,7 @@ exact-match rules for each flow.
 
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
+from pox.lib.packet.arp import arp
 from pox.lib.util import dpid_to_str
 from pox.lib.util import str_to_bool
 import time
@@ -90,6 +91,16 @@ class LearningSwitch (object):
 
     #log.debug("Initializing LearningSwitch, transparent=%s",
     #          str(self.transparent))
+    
+    self.round_robin = 0
+    self.max_srvs = 4
+    self.frst_prt = 2
+
+
+  def roundRobin(self):
+    rr = (self.round_robin%self.max_srvs) + self.first_prt
+    self.round_robin+=1
+    return rr
 
   def _handle_PacketIn (self, event):
     """
@@ -149,6 +160,14 @@ class LearningSwitch (object):
         drop() # 2a
         return
 
+        # Round-Robin
+    switch = dpid_to_str(event.dpid)
+    if switch == "00-00-00-00-00-02" and packet.type == packet.ARP_TYPE and packet.payload.opcode == arp.REQUEST and packet.next.protodst == "10.0.0.101":
+      log.warning("PLS kill me")
+      #TODO: round-robin.
+      
+
+
     if packet.dst.is_multicast:
       flood() # 3a
     else:
@@ -162,6 +181,7 @@ class LearningSwitch (object):
               % (packet.src, packet.dst, dpid_to_str(event.dpid), port))
           drop(10)
           return
+
         # 6
         log.debug("installing flow for %s.%i -> %s.%i" %
                   (packet.src, event.port, packet.dst, port))
