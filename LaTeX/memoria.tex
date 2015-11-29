@@ -162,6 +162,213 @@ $sudo mn --custom topo.py --topo mytopo --controller remote --test pingall
 
 \subsection{Tráfico y flujos}
 
+\section{Anexo}
+\begin{Verbatim}
+mininet@mininet-vm:~/GitHub/mininet/scripts$ sudo ./testWcont topo.py 
+*** Creating network
+*** Adding controller
+*** Adding hosts:
+cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+*** Adding switches:
+s1 s2
+*** Adding links:
+(cli_1, s1) (cli_2, s1) (cli_3, s1) (cli_4, s1) (cli_5, s1) (cli_6, s1) (s1, s2) (srv_1, s2) (srv_2, s2) (srv_3, s2) (srv_4, s2)
+*** Configuring hosts
+cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+*** Starting controller
+c0
+*** Starting 2 switches
+s1 s2 ...
+*** Starting CLI:
+mininet> cli_1 ping -c 4 10.0.0.101
+PING 10.0.0.101 (10.0.0.101) 56(84) bytes of data.
+64 bytes from 10.0.0.101: icmp_seq=1 ttl=64 time=12.2 ms
+64 bytes from 10.0.0.101: icmp_seq=2 ttl=64 time=1.21 ms
+64 bytes from 10.0.0.101: icmp_seq=3 ttl=64 time=0.200 ms
+64 bytes from 10.0.0.101: icmp_seq=4 ttl=64 time=0.063 ms
+
+--- 10.0.0.101 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 0.063/3.441/12.288/5.127 ms
+mininet> cli_2 ping -c 4 10.0.0.101
+PING 10.0.0.101 (10.0.0.101) 56(84) bytes of data.
+64 bytes from 10.0.0.101: icmp_seq=1 ttl=64 time=31.9 ms
+64 bytes from 10.0.0.101: icmp_seq=2 ttl=64 time=0.810 ms
+64 bytes from 10.0.0.101: icmp_seq=3 ttl=64 time=0.071 ms
+64 bytes from 10.0.0.101: icmp_seq=4 ttl=64 time=0.776 ms
+
+--- 10.0.0.101 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3000ms
+rtt min/avg/max/mdev = 0.071/8.392/31.914/13.583 ms
+mininet> cli_3 ping -c 4 10.0.0.101
+PING 10.0.0.101 (10.0.0.101) 56(84) bytes of data.
+64 bytes from 10.0.0.101: icmp_seq=1 ttl=64 time=40.4 ms
+64 bytes from 10.0.0.101: icmp_seq=2 ttl=64 time=1.28 ms
+64 bytes from 10.0.0.101: icmp_seq=3 ttl=64 time=0.072 ms
+64 bytes from 10.0.0.101: icmp_seq=4 ttl=64 time=0.671 ms
+
+--- 10.0.0.101 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3003ms
+rtt min/avg/max/mdev = 0.072/10.614/40.426/17.217 ms
+mininet> cli_4 ping -c 4 10.0.0.101
+PING 10.0.0.101 (10.0.0.101) 56(84) bytes of data.
+64 bytes from 10.0.0.101: icmp_seq=1 ttl=64 time=28.5 ms
+64 bytes from 10.0.0.101: icmp_seq=2 ttl=64 time=0.407 ms
+64 bytes from 10.0.0.101: icmp_seq=3 ttl=64 time=0.073 ms
+64 bytes from 10.0.0.101: icmp_seq=4 ttl=64 time=0.083 ms
+
+--- 10.0.0.101 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+rtt min/avg/max/mdev = 0.073/7.284/28.574/12.292 ms
+mininet> cli_5 ping -c 4 10.0.0.101
+PING 10.0.0.101 (10.0.0.101) 56(84) bytes of data.
+64 bytes from 10.0.0.101: icmp_seq=1 ttl=64 time=19.3 ms
+64 bytes from 10.0.0.101: icmp_seq=2 ttl=64 time=0.447 ms
+64 bytes from 10.0.0.101: icmp_seq=3 ttl=64 time=0.846 ms
+64 bytes from 10.0.0.101: icmp_seq=4 ttl=64 time=0.087 ms
+
+--- 10.0.0.101 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+rtt min/avg/max/mdev = 0.087/5.178/19.332/8.176 ms
+mininet> cli_6 ping -c 4 10.0.0.101
+PING 10.0.0.101 (10.0.0.101) 56(84) bytes of data.
+64 bytes from 10.0.0.101: icmp_seq=1 ttl=64 time=38.9 ms
+64 bytes from 10.0.0.101: icmp_seq=2 ttl=64 time=0.448 ms
+64 bytes from 10.0.0.101: icmp_seq=3 ttl=64 time=0.597 ms
+64 bytes from 10.0.0.101: icmp_seq=4 ttl=64 time=0.352 ms
+
+--- 10.0.0.101 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 0.352/10.082/38.933/16.657 ms
+mininet> pingall
+*** Ping: testing ping reachability
+cli_1 -> cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_2 -> cli_1 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_3 -> cli_1 cli_2 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_4 -> cli_1 cli_2 cli_3 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_5 -> cli_1 cli_2 cli_3 cli_4 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_6 -> cli_1 cli_2 cli_3 cli_4 cli_5 srv_1 srv_2 srv_3 srv_4
+srv_1 -> cli_1 X X X cli_5 X srv_2 srv_3 srv_4
+srv_2 -> X cli_2 X X X cli_6 srv_1 srv_3 srv_4
+srv_3 -> X X cli_3 X X X srv_1 srv_2 srv_4
+srv_4 -> X X X cli_4 X X srv_1 srv_2 srv_3
+*** Results: 20% dropped (72/90 received)
+mininet> dpctl dump-flows
+*** s1 ------------------------------------------------------------------------
+NXST_FLOW reply (xid=0x4):
+*** s2 ------------------------------------------------------------------------
+NXST_FLOW reply (xid=0x4):
+ cookie=0x0, duration=390.693s, table=0, n_packets=24, n_bytes=1512, idle_age=309, dl_src=fe:1c:e8:bb:47:2b actions=output:4
+ cookie=0x0, duration=397.979s, table=0, n_packets=25, n_bytes=1554, idle_age=312, dl_src=5a:fb:3a:24:c3:d0 actions=output:3
+ cookie=0x0, duration=368.291s, table=0, n_packets=21, n_bytes=1386, idle_age=303, dl_src=26:1a:ac:72:e4:51 actions=output:3
+ cookie=0x0, duration=383.206s, table=0, n_packets=23, n_bytes=1470, idle_age=303, dl_src=ba:d3:b1:08:9d:20 actions=output:5
+ cookie=0x0, duration=406.713s, table=0, n_packets=26, n_bytes=1596, idle_age=315, dl_src=86:bd:bc:16:52:e3 actions=output:2
+ cookie=0x0, duration=376.218s, table=0, n_packets=21, n_bytes=1386, idle_age=306, dl_src=ca:6d:f2:8c:c1:a9 actions=output:2
+mininet> cli_1 ifconfig
+cli_1-eth0 Link encap:Ethernet  HWaddr 86:bd:bc:16:52:e3
+          inet addr:10.0.0.1  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:101 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:41 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:5306 (5.3 KB)  TX bytes:2786 (2.7 KB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+mininet> cli_2 ifconfig
+cli_2-eth0 Link encap:Ethernet  HWaddr 5a:fb:3a:24:c3:d0
+          inet addr:10.0.0.2  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:101 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:41 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:5306 (5.3 KB)  TX bytes:2786 (2.7 KB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+mininet> cli_3 ifconfig
+cli_3-eth0 Link encap:Ethernet  HWaddr fe:1c:e8:bb:47:2b
+          inet addr:10.0.0.3  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:101 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:41 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:5306 (5.3 KB)  TX bytes:2786 (2.7 KB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+mininet> cli_4 ifconfig
+cli_4-eth0 Link encap:Ethernet  HWaddr ba:d3:b1:08:9d:20
+          inet addr:10.0.0.4  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:101 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:41 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:5306 (5.3 KB)  TX bytes:2786 (2.7 KB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+mininet> cli_5 ifconfig
+cli_5-eth0 Link encap:Ethernet  HWaddr ca:6d:f2:8c:c1:a9
+          inet addr:10.0.0.5  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:100 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:40 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:5264 (5.2 KB)  TX bytes:2744 (2.7 KB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+mininet> cli_6 ifconfig
+cli_6-eth0 Link encap:Ethernet  HWaddr 26:1a:ac:72:e4:51
+          inet addr:10.0.0.6  Bcast:10.255.255.255  Mask:255.0.0.0
+          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+          RX packets:101 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:41 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:1000
+          RX bytes:5306 (5.3 KB)  TX bytes:2786 (2.7 KB)
+
+lo        Link encap:Local Loopback
+          inet addr:127.0.0.1  Mask:255.0.0.0
+          UP LOOPBACK RUNNING  MTU:65536  Metric:1
+          RX packets:0 errors:0 dropped:0 overruns:0 frame:0
+          TX packets:0 errors:0 dropped:0 overruns:0 carrier:0
+          collisions:0 txqueuelen:0
+          RX bytes:0 (0.0 B)  TX bytes:0 (0.0 B)
+
+mininet>
+
+\end{Verbatim}
 
 \begin{thebibliography}{99}
 
