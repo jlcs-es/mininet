@@ -267,6 +267,60 @@ srv_4 -> X X X cli_4 X X srv_1 srv_2 srv_3
 
 %TODO: tráfico en el lado de los servidores: sólo analizar de wireshark los servidores
 
+Tráfico analizado con wireshark:
+
+\hfil
+
+En los ficheros \textit{srv1.pcapng} a \textit{srv4.pcapng} se encuentran las capturas de tráfico de las pruebas en cada uno de los servidores. A continuación se muestran capturas de cada fichero con las trazas más interesantes:
+
+
+\begin{center}
+	\includegraphics[scale=0.5]{images/srv1.png}
+\end{center}
+
+\hfill
+
+En la captura de srv\_1 vemos 2 ARP seguidos de 8 PING entre 10.0.0.1 y la IP de los servidores. Corresponde al \textit{cli\_1 ping -c 4 10.0.0.101}, con el ARP request que analizará el controlador, la respuesta con MAC la del primer servidor, y 4 ping reply y 4 request con números de secuencia del 1 al 4.
+
+A continuación, la misma situación pero con \textit{cli\_5}, pues por round-robin le correspondía el servidor 1 de nuevo, y por ello no aparecen aquí el resto de pings de los clientes.
+
+Finalmente, una sucesión de ARP request desde el servidor al resto de clientes, pero sin respuesta, seguidos de varios mensajes PING desde y hacia los clientes 1 y 5 todos con número de secuencia 1.
+
+Corresponde a la prueba de \textit{pingall}, donde mininet manda la orden al servidor 1 de hacer un ping a cada IP cliente, pero por los flujos en el switch, los paquetes de respuesta se reenvían a otro servidor, y como esto ocurre con cada uno de los 4 servidores, con la misma IP, se explica por qué hay 4 pares de mensajes ICMP Ping con número de secuencia siempre 1 desde cada cliente 1 y 5: por pingall, deben hacer un ping a la IP de las máquinas servidor, que tienen el mismo valor 10.0.0.101, y el switch los reenvía a la misma máquina, en este caso srv\_1.
+
+En resumen, en pingall el servidor recibe los PING destinados a los otros servidores.
+
+\hfill
+
+\begin{center}
+	\includegraphics[scale=0.5]{images/srv2.png}
+\end{center}
+
+
+En el servidor 2 ocurre lo mismo que en el 1 pero con los clientes 2 y 6 que le corresponden por round-robin.
+
+\hfill
+
+\begin{center}
+	\includegraphics[scale=0.5]{images/srv3.png}
+\end{center}
+
+En el servidor 3 ocurren \textit{tres cuartos de lo mismo} que en el resto pero con sólo el cliente 3. En esta captura aprovecho para comentar lo que ocurre en los 4 servidores, pero que se ve en la imagen: wireshark detecta una IP duplicada en la red. Lo descubre porque en un ARP reply previo la IP y MAC destino eran la del servidor 3, pero el ARP request donde se detecta la duplicidad proviene de otro servidor, en la traza 24 corresponde a srv\_1, en la 39 al srv\_2, etc.
+
+Como estos mensajes ARP request no preguntan por la IP de los servidores, se reenvían como cualquier otro paquete y no se ven afectados por los flujos que hemos programado para el balanceo.
+
+\hfill
+
+\begin{center}
+	\includegraphics[scale=0.5]{images/srv4.png}
+\end{center}
+
+Y en el servidor 4 ocurre con el cliente 4 lo mismo que en el servidor 3 con el cliente 3.
+
+
+\hfill
+
+
 \hfill
 
 Flujos de los switches:
@@ -558,11 +612,5 @@ lo        Link encap:Local Loopback
 mininet>
 
 \end{Verbatim}
-
-\begin{thebibliography}{99}
-
-
-\end{thebibliography}
-
 
 \end{document}
