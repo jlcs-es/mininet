@@ -11,6 +11,7 @@
 \usepackage{color}
 \usepackage{fancyvrb}
 \usepackage{hyperref}
+\usepackage{appendix}
 \hypersetup{%
 	pdfborder = {0 0 0}
 }
@@ -58,6 +59,19 @@
 
 \section{Topología mininet}
 
+La topología implementada en mininet corresponde, como se puede ver en la \autoref{fig:topology} a dos switch conectados al controlador, 6 máquinas cliente y 4 servidores.
+
+
+\begin{figure}[!h]
+	\centering
+	\includegraphics[scale=0.29]{images/topology.png}
+	\caption{Topología}
+	\label{fig:topology}
+\end{figure}
+
+\hfill
+
+El código en python que define a la topología es el siguiente. Para facilitar las pruebas, a los servidores se les da una dirección MAC prefijada en el método \textit{addHost}, y a las conexiones con el switch `s2'  siempre se indican a qué puerto conectar, con el parámetro \textit{port2} del método \textit{addLink}.
 
 \begin{lstlisting}[language=Python]
 # -*- coding: utf-8 -*-
@@ -108,6 +122,9 @@ topos = {'mytopo': lambda: MyTopo()}
 
 \section{Controlador POX con l2\_learning}
 
+Realizamos un test básico de la topología anterior usando el fichero \textit{l2\_learning} que proporciona POX.
+
+La salida por pantalla de mininet durante la prueba es la siguiente:
 
 \begin{Verbatim}[frame=single]
 $sudo mn --custom topo.py --topo mytopo --controller remote --test pingall
@@ -152,19 +169,184 @@ $sudo mn --custom topo.py --topo mytopo --controller remote --test pingall
 	completed in 6.529 seconds
 \end{Verbatim}
 
+Todos los hosts (clientes y servidores) tienen conectividad entre ellos y ningún paquete ICMP se ha perdido. La topología de mininet es correcta y se conecta con el controlador POX.
+
 \section{Construcción del balanceador de carga}
 
 \subsection{Módulo de balanceo en POX}
 
+Partimos del fichero \textit{l2\_learning.py} y añadimos las siguientes líneas de código en la clase LearningSwitch.
+
+Las primeras líneas sirven para definir el método que por round-robin devuelve el siguiente puerto del switch s2 por el que balancear una nueva conexión a los servidores.
+
+\begin{lstlisting}[language=Python]
+class LearningSwitch (object):
+	[...]
+	 def __init__ (self, connection, transparent):
+		[...]
+		self.round_robin = 0
+		self.max_srvs = 4
+		self.frst_prt = 2
+
+	def roundRobin(self):
+		rr = (self.round_robin%self.max_srvs) + self.frst_prt
+		self.round_robin+=1
+		return rr
+\end{lstlisting}
+
+
+Estas líneas se añaden en \_handle\_PacketIn casi al inicio del método, después de aprender el puerto para la MAC del origen (añadiendo una entrada en \textit{macToPort}), y comprobamos que sea un mensaje del switch 2, que es el que debe balancear, que es un ARP REQUEST y que pregunta por la máquina con IP la de nuestros servidores balanceados.
+
+En caso de ser un paquete que cumple todo lo anterior, creamos un mensaje para el switch s2 que añadirá a su tabla un nuevo flujo para todo paquete con MAC origen la del cliente que se envíe por el puerto del switch que indique el método del round-robin.
+
+\begin{lstlisting}[language=Python]
+def _handle_PacketIn (self, event):
+	[...]
+	# Round-Robin
+	if ( dpid_to_str(event.dpid) == "00-00-00-00-00-02" and
+                         packet.type == packet.ARP_TYPE and
+                   packet.payload.opcode == arp.REQUEST and
+                      packet.next.protodst == "10.0.0.101" ):
+		msg = of.ofp_flow_mod()
+		msg.match.dl_src = packet.src
+		msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
+		#msg.idle_timeout = 10
+		#msg.hard_timeout = 30
+		msg.data = event.ofp
+		self.connection.send(msg)
+		return
+
+	if packet.dst.is_multicast:
+		flood() # 3a
+	[...]
+\end{lstlisting}
+
+
 \subsection{Modificación topología}
+
+A la topología de mininet el único cambio que hay que aplicarle es modificar las líneas 22 a 26, modificando la IP en \textit{addHost} por la 10.0.0.101, y que así sea única para todos los servidores.
 
 \subsection{Ejecución y prueba de PING}
 
+En el anexo al final de esta memoria se encuentra la salida por pantalla completa de las pruebas realizadas, y a continuación se muestra parte de las pruebas con ping aplicadas.
+
+Para cada cliente se ejecuta la orden \textit{cli\_i ping -c 4 10.0.0.101}, 4 pings a la dirección de los servidores, que como vemos el primero tiene un retardo bastante considerable frente a los 3 siguientes, debido a que con el primero de todos el switch debe comunicarse con el controlador que se asigna el flujo para la MAC del cliente. Como el flujo se guarda en el switch, se aplica instantáneamente con los siguientes mensajes.
+
+Además se realiza un \textit{pingall} que muestra que los 6 clientes alcanzan, como en l2\_learning a todas las máquinas. Sin embargo, los servidores, a pesar de poder hacer ping al resto de servidores, sólo reciben respuesta de uno o dos clientes, pues las respuestas tienen MAC origen la del cliente, y se reenvían al puerto asignado por round-robin en los pings anteriores. Por ejemplo, a los clientes 1 y 5 se les asignó, de los 4 servidores, el \textit{srv\_1}.
+
+\hfill
+
+\begin{Verbatim}
+mininet> cli_6 ping -c 4 10.0.0.101
+PING 10.0.0.101 (10.0.0.101) 56(84) bytes of data.
+64 bytes from 10.0.0.101: icmp_seq=1 ttl=64 time=38.9 ms
+64 bytes from 10.0.0.101: icmp_seq=2 ttl=64 time=0.448 ms
+64 bytes from 10.0.0.101: icmp_seq=3 ttl=64 time=0.597 ms
+64 bytes from 10.0.0.101: icmp_seq=4 ttl=64 time=0.352 ms
+
+--- 10.0.0.101 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3006ms
+rtt min/avg/max/mdev = 0.352/10.082/38.933/16.657 ms
+mininet> pingall
+*** Ping: testing ping reachability
+cli_1 -> cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_2 -> cli_1 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_3 -> cli_1 cli_2 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_4 -> cli_1 cli_2 cli_3 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_5 -> cli_1 cli_2 cli_3 cli_4 cli_6 srv_1 srv_2 srv_3 srv_4
+cli_6 -> cli_1 cli_2 cli_3 cli_4 cli_5 srv_1 srv_2 srv_3 srv_4
+srv_1 -> cli_1 X X X cli_5 X srv_2 srv_3 srv_4
+srv_2 -> X cli_2 X X X cli_6 srv_1 srv_3 srv_4
+srv_3 -> X X cli_3 X X X srv_1 srv_2 srv_4
+srv_4 -> X X X cli_4 X X srv_1 srv_2 srv_3
+*** Results: 20% dropped (72/90 received)
+\end{Verbatim}
+
+
 \subsection{Tráfico y flujos}
 
-\section{Anexo}
+%TODO: tráfico en el lado de los servidores: sólo analizar de wireshark los servidores
+
+\hfill
+
+Flujos de los switches:
+
+\hfill
+
+En el código del controlador de la sección anterior había comentadas dos líneas que indicaban al switch que la regla del nuevo flujo debería caducar. Para facilitar las pruebas, se comentan, y pasados unos segundos en los que las reglas de aprendizaje de macToPort sí caducan, con la orden en mininet \textit{dpctl dump-flows} se muestran las tablas con los flujos asignados por round-robin.
+
+\hfill
+
+
+
 \begin{Verbatim}
-mininet@mininet-vm:~/GitHub/mininet/scripts$ sudo ./testWcont topo.py 
+mininet> dpctl dump-flows
+*** s1 ------------------------------------------------------------------------
+NXST_FLOW reply (xid=0x4):
+*** s2 ------------------------------------------------------------------------
+NXST_FLOW reply (xid=0x4):
+cookie=0x0, duration=390.693s, table=0, n_packets=24, n_bytes=1512, idle_age=309,
+dl_src=fe:1c:e8:bb:47:2b actions=output:4
+cookie=0x0, duration=397.979s, table=0, n_packets=25, n_bytes=1554, idle_age=312,
+dl_src=5a:fb:3a:24:c3:d0 actions=output:3
+cookie=0x0, duration=368.291s, table=0, n_packets=21, n_bytes=1386, idle_age=303,
+dl_src=26:1a:ac:72:e4:51 actions=output:3
+cookie=0x0, duration=383.206s, table=0, n_packets=23, n_bytes=1470, idle_age=303,
+dl_src=ba:d3:b1:08:9d:20 actions=output:5
+cookie=0x0, duration=406.713s, table=0, n_packets=26, n_bytes=1596, idle_age=315,
+dl_src=86:bd:bc:16:52:e3 actions=output:2
+cookie=0x0, duration=376.218s, table=0, n_packets=21, n_bytes=1386, idle_age=306,
+dl_src=ca:6d:f2:8c:c1:a9 actions=output:2
+\end{Verbatim}
+
+
+Se observa que todas pertenecen a la tabla 0, y que en \textit{dl\_src} se indica la MAC de un cliente y en \textit{actions=output} el puerto por donde reenviar el paquete. Usando la información de los \textit{ifconfig} que se encuentra en el anexo, se puede hacer la correspondencia de cada cliente con su MAC y por tanto su flujo.
+
+A los clientes 1 y 5 les corresponde el puerto 2, es decir, el servidor 1. A los clientes 2 y 6 el puerto 3, servidor 2. Al cliente 3 el puerto 4, servidor 3. Y al cliente 4 el puerto 5, servidor 4.
+
+
+\hfill
+
+Las tablas de flujos de los switchs sin que hayan caducado las entradas de macToPort son las siguientes:
+
+\begin{Verbatim}
+mininet> dpctl dump-flows
+*** s1 ------------------------------------------------------------------------
+NXST_FLOW reply (xid=0x4):
+cookie=0x0, duration=10.672s, table=0, n_packets=3, n_bytes=126, idle_timeout=10,
+ hard_timeout=30, idle_age=8, priority=65535,arp,in_port=7,vlan_tci=0x0000,
+  dl_src=02:3f:e7:62:af:f1,dl_dst=00:00:00:00:01:04,arp_spa=10.0.0.6,
+  arp_tpa=10.0.0.101,arp_op=2 actions=output:1
+cookie=0x0, duration=8.627s, table=0, n_packets=1, n_bytes=42, idle_timeout=10,
+ hard_timeout=30, idle_age=8, priority=65535,arp,in_port=5,vlan_tci=0x0000,
+  dl_src=0a:27:a9:ce:34:da,dl_dst=00:00:00:00:01:04,arp_spa=10.0.0.4,
+  arp_tpa=10.0.0.101,arp_op=2 actions=output:1
+cookie=0x0, duration=8.666s, table=0, n_packets=1, n_bytes=42, idle_timeout=10,
+ hard_timeout=30, idle_age=8, priority=65535,arp,in_port=1,vlan_tci=0x0000,
+  dl_src=00:00:00:00:01:04,dl_dst=0a:27:a9:ce:34:da,arp_spa=10.0.0.101,
+  arp_tpa=10.0.0.4,arp_op=1 actions=output:5
+*** s2 ------------------------------------------------------------------------
+NXST_FLOW reply (xid=0x4):
+cookie=0x0, duration=8.673s, table=0, n_packets=1, n_bytes=42, idle_timeout=10,
+ hard_timeout=30, idle_age=8, priority=65535,arp,in_port=5,vlan_tci=0x0000,dl_src=00:00:00:00:01:04,dl_dst=0a:27:a9:ce:34:da,arp_spa=10.0.0.101,arp_tpa=10.0.0.4,arp_op=1 actions=output:1
+cookie=0x0, duration=117.856s, table=0, n_packets=26, n_bytes=1596, idle_age=20,
+ dl_src=ba:b9:7f:25:67:db actions=output:2
+cookie=0x0, duration=110.578s, table=0, n_packets=25, n_bytes=1554, idle_age=17,
+ dl_src=d6:a7:d3:3c:41:ed actions=output:3
+cookie=0x0, duration=78.586s, table=0, n_packets=21, n_bytes=1386, idle_age=8,
+ dl_src=02:3f:e7:62:af:f1 actions=output:3
+cookie=0x0, duration=86.319s, table=0, n_packets=21, n_bytes=1386, idle_age=11,
+ dl_src=e6:aa:ea:b9:70:6a actions=output:2
+cookie=0x0, duration=103.169s, table=0, n_packets=24, n_bytes=1512, idle_age=14,
+ dl_src=f6:46:72:d8:ae:cc actions=output:4
+cookie=0x0, duration=93.593s, table=0, n_packets=23, n_bytes=1470, idle_age=8,
+ dl_src=0a:27:a9:ce:34:da actions=output:5
+\end{Verbatim}
+
+\appendix
+\section{Test ping}
+\begin{Verbatim}
+mininet@mininet-vm:~/GitHub/mininet/scripts$ sudo ./testWcont topo.py
 *** Creating network
 *** Adding controller
 *** Adding hosts:
@@ -172,7 +354,8 @@ cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
 *** Adding switches:
 s1 s2
 *** Adding links:
-(cli_1, s1) (cli_2, s1) (cli_3, s1) (cli_4, s1) (cli_5, s1) (cli_6, s1) (s1, s2) (srv_1, s2) (srv_2, s2) (srv_3, s2) (srv_4, s2)
+(cli_1, s1) (cli_2, s1) (cli_3, s1) (cli_4, s1) (cli_5, s1) (cli_6, s1)
+ (s1, s2) (srv_1, s2) (srv_2, s2) (srv_3, s2) (srv_4, s2)
 *** Configuring hosts
 cli_1 cli_2 cli_3 cli_4 cli_5 cli_6 srv_1 srv_2 srv_3 srv_4
 *** Starting controller
@@ -258,12 +441,18 @@ mininet> dpctl dump-flows
 NXST_FLOW reply (xid=0x4):
 *** s2 ------------------------------------------------------------------------
 NXST_FLOW reply (xid=0x4):
- cookie=0x0, duration=390.693s, table=0, n_packets=24, n_bytes=1512, idle_age=309, dl_src=fe:1c:e8:bb:47:2b actions=output:4
- cookie=0x0, duration=397.979s, table=0, n_packets=25, n_bytes=1554, idle_age=312, dl_src=5a:fb:3a:24:c3:d0 actions=output:3
- cookie=0x0, duration=368.291s, table=0, n_packets=21, n_bytes=1386, idle_age=303, dl_src=26:1a:ac:72:e4:51 actions=output:3
- cookie=0x0, duration=383.206s, table=0, n_packets=23, n_bytes=1470, idle_age=303, dl_src=ba:d3:b1:08:9d:20 actions=output:5
- cookie=0x0, duration=406.713s, table=0, n_packets=26, n_bytes=1596, idle_age=315, dl_src=86:bd:bc:16:52:e3 actions=output:2
- cookie=0x0, duration=376.218s, table=0, n_packets=21, n_bytes=1386, idle_age=306, dl_src=ca:6d:f2:8c:c1:a9 actions=output:2
+ cookie=0x0, duration=390.693s, table=0, n_packets=24, n_bytes=1512, idle_age=309,
+  dl_src=fe:1c:e8:bb:47:2b actions=output:4
+ cookie=0x0, duration=397.979s, table=0, n_packets=25, n_bytes=1554, idle_age=312,
+  dl_src=5a:fb:3a:24:c3:d0 actions=output:3
+ cookie=0x0, duration=368.291s, table=0, n_packets=21, n_bytes=1386, idle_age=303,
+  dl_src=26:1a:ac:72:e4:51 actions=output:3
+ cookie=0x0, duration=383.206s, table=0, n_packets=23, n_bytes=1470, idle_age=303,
+  dl_src=ba:d3:b1:08:9d:20 actions=output:5
+ cookie=0x0, duration=406.713s, table=0, n_packets=26, n_bytes=1596, idle_age=315,
+  dl_src=86:bd:bc:16:52:e3 actions=output:2
+ cookie=0x0, duration=376.218s, table=0, n_packets=21, n_bytes=1386, idle_age=306,
+  dl_src=ca:6d:f2:8c:c1:a9 actions=output:2
 mininet> cli_1 ifconfig
 cli_1-eth0 Link encap:Ethernet  HWaddr 86:bd:bc:16:52:e3
           inet addr:10.0.0.1  Bcast:10.255.255.255  Mask:255.0.0.0
