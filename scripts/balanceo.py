@@ -174,34 +174,34 @@ Idea:   Si es ARP REQUEST:
 """
 
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
-        if packet.type == packet.IP_TYPE: #Paquete IP
-            ipP = packet.next #TODO: comprobar que es el paquete IP al usar next en vez de payload
-            if ipP.dstip == "10.0.0.101" : #Se dirige a los servidores
-                if ipP.protocol==ipv4.TCP_PROTOCOL:
-                    tcpP = ipP.next
-                    if tcpP.dstport==80: #HTTP
-                        print "Conexión HTTP"
-                    elif tcpP.dstport==443: #HTTPS
-                        print "Conexión HTTPS"
-                    elif tcpP.dstport==22: #SSH
-                        print "Conexión SSH"
-                elif ipP.protocol==ipv4.UDP_PROTOCOL:
-                    print "Conexión UDP"
-                else
-                    pass
-        elif ( packet.type == packet.ARP_TYPE and
-              packet.next.opcode == arp.REQUEST and #TODO: comprobar que va next frente a payload
-              packet.next.protodst == "10.0.0.101" ):
-            # Round-Robin
-            msg = of.ofp_flow_mod()
-            msg.match.dl_src = packet.src
-            msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
-            msg.idle_timeout = 10
-            msg.hard_timeout = 30
-            msg.data = event.ofp
-            self.connection.send(msg)
-            print "ARP REQUEST"
-            return
+      if packet.type == packet.IP_TYPE: #Paquete IP
+        ipP = packet.next #TODO: comprobar que es el paquete IP al usar next en vez de payload
+        if ipP.dstip == "10.0.0.101" : #Se dirige a los servidores
+          if ipP.protocol==ipv4.TCP_PROTOCOL:
+            tcpP = ipP.next
+            if tcpP.dstport==80: #HTTP
+              print "Conexión HTTP"
+            elif tcpP.dstport==443: #HTTPS
+              print "Conexión HTTPS"
+            elif tcpP.dstport==22: #SSH
+              print "Conexión SSH"
+            elif ipP.protocol==ipv4.UDP_PROTOCOL:
+              print "Conexión UDP"
+            else
+              pass
+      elif ( packet.type == packet.ARP_TYPE and
+            packet.next.opcode == arp.REQUEST and #TODO: comprobar que va next frente a payload
+            packet.next.protodst == "10.0.0.101" ):
+          # Round-Robin
+        msg = of.ofp_flow_mod()
+        msg.match.dl_src = packet.src
+        msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
+        msg.idle_timeout = 10
+        msg.hard_timeout = 30
+        msg.data = event.ofp
+        self.connection.send(msg)
+        print "ARP REQUEST"
+        return
 
 
     if packet.dst.is_multicast:
