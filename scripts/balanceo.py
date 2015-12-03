@@ -162,16 +162,16 @@ class LearningSwitch (object):
         drop() # 2a
         return
 
-"""
-Idea:   Si es ARP REQUEST:
-            Reenviar a cualquiera, pero NO CREAR FLUJO, sólo reenviar, me sirve round-robin para resto de conexiones NO CONSIDERADAS, de modo que el round-robin resuelve la MAC para la caché del cliente.
-        Si es TCP:
-            Si es a puerto 80:
-                Reenviar a uno de los servidores (o del 1 al 3). Si es a los 4, usar un round-robin con pesos. Podría ser un array, módulo a longitud del array, y en cada posición del array el número de servidor, y al rellenar el array a srv4 se le dan menos entradas.
-            Si es a puerto 22:
-                Reenviar a servidor 4.
+    """
+    Idea:   Si es ARP REQUEST:
+                Reenviar a cualquiera, pero NO CREAR FLUJO, sólo reenviar, me sirve round-robin para resto de conexiones NO CONSIDERADAS, de modo que el round-robin resuelve la MAC para la caché del cliente.
+            Si es TCP:
+                Si es a puerto 80:
+                    Reenviar a uno de los servidores (o del 1 al 3). Si es a los 4, usar un round-robin con pesos. Podría ser un array, módulo a longitud del array, y en cada posición del array el número de servidor, y al rellenar el array a srv4 se le dan menos entradas.
+                Si es a puerto 22:
+                    Reenviar a servidor 4.
 
-"""
+    """
 
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
       if packet.type == packet.IP_TYPE: #Paquete IP
