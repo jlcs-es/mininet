@@ -173,7 +173,7 @@ Idea:   Si es ARP REQUEST:
 
 """
 
-    if dpid_to_str(event.dpid) == "00-00-00-00-00-02": #Switch2
+    if dpid_to_str(event.dpid) == "00-00-00-00-00-02":  #Switch2
         if packet.type == packet.IP_TYPE: #Paquete IP
             ipP = packet.next #TODO: comprobar que es el paquete IP al usar next en vez de payload
             if ipP.dstip == "10.0.0.101" : #Se dirige a los servidores
