@@ -185,10 +185,10 @@ class LearningSwitch (object):
               print "Conexión HTTPS"
             elif tcpP.dstport==22: #SSH
               print "Conexión SSH"
-            elif ipP.protocol==ipv4.UDP_PROTOCOL:
-              print "Conexión UDP"
-            else
-              pass
+          elif ipP.protocol==ipv4.UDP_PROTOCOL:
+            print "Conexión UDP"
+          else:
+            pass
       elif ( packet.type == packet.ARP_TYPE and
             packet.next.opcode == arp.REQUEST and #TODO: comprobar que va next frente a payload
             packet.next.protodst == "10.0.0.101" ):
