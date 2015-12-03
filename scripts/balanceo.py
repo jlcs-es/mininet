@@ -91,7 +91,7 @@ class LearningSwitch (object):
 
     #log.debug("Initializing LearningSwitch, transparent=%s",
     #          str(self.transparent))
-    
+
     self.round_robin = 0
     self.max_srvs = 4
     self.frst_prt = 2
@@ -160,19 +160,46 @@ class LearningSwitch (object):
         drop() # 2a
         return
 
-    # Round-Robin
-    if ( dpid_to_str(event.dpid) == "00-00-00-00-00-02" and
-                         packet.type == packet.ARP_TYPE and
-                   packet.payload.opcode == arp.REQUEST and
-                      packet.next.protodst == "10.0.0.101" ):
-      msg = of.ofp_flow_mod()
-      msg.match.dl_src = packet.src
-      msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
-      #msg.idle_timeout = 10
-      #msg.hard_timeout = 30
-      msg.data = event.ofp
-      self.connection.send(msg)
-      return
+"""
+Idea:   Si es ARP REQUEST:
+            Reenviar a cualquiera, pero NO CREAR FLUJO, sólo reenviar, me sirve round-robin para resto de conexiones NO CONSIDERADAS, de modo que el round-robin resuelve la MAC para la caché del cliente.
+        Si es TCP:
+            Si es a puerto 80:
+                Reenviar a uno de los servidores (o del 1 al 3). Si es a los 4, usar un round-robin con pesos. Podría ser un array, módulo a longitud del array, y en cada posición del array el número de servidor, y al rellenar el array a srv4 se le dan menos entradas.
+            Si es a puerto 22:
+                Reenviar a servidor 4.
+
+"""
+
+    if dpid_to_str(event.dpid) == "00-00-00-00-00-02": #Switch2
+        if packet.type == packet.IP_TYPE: #Paquete IP
+            ipP = packet.next #TODO: comprobar que es el paquete IP al usar next en vez de payload
+            if ipP.dstip == "10.0.0.101" : #Se dirige a los servidores
+                if ipP.protocol==ipv4.TCP_PROTOCOL:
+                    tcpP = ipP.next
+                    if tcpP.dstport==80: #HTTP
+                        print "Conexión HTTP"
+                    elif tcpP.dstport==443: #HTTPS
+                        print "Conexión HTTPS"
+                    elif tcpP.dstport==22: #SSH
+                        print "Conexión SSH"
+                elif ipP.protocol==ipv4.UDP_PROTOCOL:
+                    print "Conexión UDP"
+                else
+                    pass
+        elif ( packet.type == packet.ARP_TYPE and
+              packet.next.opcode == arp.REQUEST and #TODO: comprobar que va next frente a payload
+              packet.next.protodst == "10.0.0.101" ):
+            # Round-Robin
+            msg = of.ofp_flow_mod()
+            msg.match.dl_src = packet.src
+            msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
+            msg.idle_timeout = 10
+            msg.hard_timeout = 30
+            msg.data = event.ofp
+            self.connection.send(msg)
+            print "ARP REQUEST"
+            return
 
 
     if packet.dst.is_multicast:
@@ -226,4 +253,3 @@ def launch (transparent=False, hold_down=_flood_delay):
     raise RuntimeError("Expected hold-down to be a number")
 
   core.registerNew(l2_learning, str_to_bool(transparent))
-
