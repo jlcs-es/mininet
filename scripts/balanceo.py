@@ -25,6 +25,7 @@ exact-match rules for each flow.
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.packet.arp import arp
+from pox.lib.packet.ipv4 import ipv4
 from pox.lib.util import dpid_to_str
 from pox.lib.util import str_to_bool
 import time
@@ -175,7 +176,7 @@ class LearningSwitch (object):
 
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
       if packet.type == packet.IP_TYPE: #Paquete IP
-        ipP = packet.next #TODO: comprobar que es el paquete IP al usar next en vez de payload
+        ipP = packet.next
         if ipP.dstip == "10.0.0.101" : #Se dirige a los servidores
           if ipP.protocol==ipv4.TCP_PROTOCOL:
             tcpP = ipP.next
@@ -190,14 +191,15 @@ class LearningSwitch (object):
           else:
             pass
       elif ( packet.type == packet.ARP_TYPE and
-            packet.next.opcode == arp.REQUEST and #TODO: comprobar que va next frente a payload
+            packet.next.opcode == arp.REQUEST and
             packet.next.protodst == "10.0.0.101" ):
           # Round-Robin
-        msg = of.ofp_flow_mod()
-        msg.match.dl_src = packet.src
+        #msg = of.ofp_flow_mod()
+        #msg.match.dl_src = packet.src
+        msg = of.ofp_packet_out()
         msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
-        msg.idle_timeout = 10
-        msg.hard_timeout = 30
+        #msg.idle_timeout = 10
+        #msg.hard_timeout = 30
         msg.data = event.ofp
         self.connection.send(msg)
         print "ARP REQUEST"
