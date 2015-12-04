@@ -26,6 +26,7 @@ from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.packet.arp import arp
 from pox.lib.packet.ipv4 import ipv4
+from pox.lib.packet.icmp import icmp
 from pox.lib.util import dpid_to_str
 from pox.lib.util import str_to_bool
 import time
@@ -35,6 +36,21 @@ log = core.getLogger()
 # We don't want to flood immediately when a switch connects.
 # Can be overriden on commandline.
 _flood_delay = 0
+
+
+srv_to_mac = {
+    1 : "00:00:00:00:01:01",
+    2 : "00:00:00:00:01:02",
+    3 : "00:00:00:00:01:03",
+    4 : "00:00:00:00:01:04",
+}
+
+srv_to_port = {
+    1 : 2,
+    2 : 3,
+    3 : 4,
+    4 : 5,
+}
 
 class LearningSwitch (object):
   """
@@ -112,6 +128,10 @@ class LearningSwitch (object):
 
     packet = event.parsed
 
+
+    global srv_to_mac
+    global srv_to_port
+
     def flood (message = None):
       """ Floods the packet """
       msg = of.ofp_packet_out()
@@ -168,10 +188,18 @@ class LearningSwitch (object):
                 Reenviar a cualquiera, pero NO CREAR FLUJO, sólo reenviar, me sirve round-robin para resto de conexiones NO CONSIDERADAS, de modo que el round-robin resuelve la MAC para la caché del cliente.
             Si es TCP:
                 Si es a puerto 80:
-                    Reenviar a uno de los servidores (o del 1 al 3). Si es a los 4, usar un round-robin con pesos. Podría ser un array, módulo a longitud del array, y en cada posición del array el número de servidor, y al rellenar el array a srv4 se le dan menos entradas.
+                    Reenviar a servidores 1 a 3. Al 1 más conexiones, peso de 2 frente a 1.
                 Si es a puerto 22:
-                    Reenviar a servidor 4.
-
+                    Reenviar a servidor 2 o 4. Al 4 más conexiones, peso de 5 frente a 1.
+                Si es a puerto 443:
+                    Reenviar a servidor 2 o 3. Igual pesos.
+            Si es UDP:
+                No hacer nada extra de l2_learning
+            Si es ICMP:
+                Si es TYPE_ECHO_REQUEST:
+                    Reenviar a servidor 1. Se supone que lo usan para comprobar que el servidor web, principal servicio, está activo.
+            Resto:
+                No hacer nada extra de l2_learning
     """
 
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
@@ -182,27 +210,69 @@ class LearningSwitch (object):
             tcpP = ipP.next
             if tcpP.dstport==80: #HTTP
               print "Conexión HTTP"
+              msg = of.ofp_flow_mod()
+              msg.match = of.ofp_match.from_packet(packet, event.port)
+              msg.idle_timeout = 10
+              msg.hard_timeout = 30
+              msg.actions.append(of.ofp_action_output(port = srv_to_port[2])) #TODO: elegir servidor bien
+              msg.data = event.ofp
+              self.connection.send(msg)
+              return
             elif tcpP.dstport==443: #HTTPS
               print "Conexión HTTPS"
+              msg = of.ofp_flow_mod()
+              msg.match = of.ofp_match.from_packet(packet, event.port)
+              msg.idle_timeout = 10
+              msg.hard_timeout = 30
+              msg.actions.append(of.ofp_action_output(port = srv_to_port[2])) #TODO: elegir servidor bien
+              msg.data = event.ofp
+              self.connection.send(msg)
+              return
             elif tcpP.dstport==22: #SSH
               print "Conexión SSH"
-          elif ipP.protocol==ipv4.UDP_PROTOCOL:
-            print "Conexión UDP"
-          else:
-            pass
-      elif ( packet.type == packet.ARP_TYPE and
+              msg = of.ofp_flow_mod()
+              msg.match = of.ofp_match.from_packet(packet, event.port)
+              msg.idle_timeout = 10
+              msg.hard_timeout = 30
+              msg.actions.append(of.ofp_action_output(port = srv_to_port[2])) #TODO: elegir servidor bien
+              msg.data = event.ofp
+              self.connection.send(msg)
+              return
+          elif ipP.protocol==ipv4.ICMP_PROTOCOL: #ICMP
+            print "Conexión ICMP"
+            icmpP = ipP.next
+            if icmpP.type == TYPE_ECHO_REQUEST: #ECHO REQUEST
+              print "Echo Request"
+              # Reenviar al servidor 1
+              msg = of.ofp_packet_out()
+              #msg = of.ofp_flow_mod()
+              #msg.match = of.ofp_match.from_packet(packet, event.port)
+              msg.actions.append(of.ofp_action_output(port = srv_to_port[1]))
+              msg.idle_timeout = 10
+              msg.hard_timeout = 30
+              msg.data = event.ofp          #FIXME: la linea siguiente peta seguro
+              msg.data.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
+              self.connection.send(msg)
+              return
+              #TODO: por gusto ver que esto funciona, pero los
+              #ARP REQUEST reenviarlos al srv_1 y listo.
+          elif ipP.protocol==ipv4.UDP_PROTOCOL: #UDP
+            print "Conexión UDP."
+        else:                                 #-RESTO-
+            print "Conexión no TCP/UDP/ICMP"
+      elif ( packet.type == packet.ARP_TYPE and     # ARP REQUEST
             packet.next.opcode == arp.REQUEST and
             packet.next.protodst == "10.0.0.101" ):
-          # Round-Robin
+        print "ARP REQUEST"
+        # Round-Robin
         #msg = of.ofp_flow_mod()
         #msg.match.dl_src = packet.src
-        msg = of.ofp_packet_out()
+        msg = of.ofp_packet_out() # Reenviar ARP, no instalar flujo.
         msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
         #msg.idle_timeout = 10
         #msg.hard_timeout = 30
         msg.data = event.ofp
         self.connection.send(msg)
-        print "ARP REQUEST"
         return
 
 
