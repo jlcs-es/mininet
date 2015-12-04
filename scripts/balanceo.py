@@ -26,7 +26,6 @@ from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.packet.arp import arp
 from pox.lib.packet.ipv4 import ipv4
-from pox.lib.packet.icmp import icmp
 from pox.lib.util import dpid_to_str
 from pox.lib.util import str_to_bool
 import time
@@ -241,7 +240,7 @@ class LearningSwitch (object):
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: #ICMP
             print "Conexión ICMP"
             icmpP = ipP.next
-            if icmpP.type == TYPE_ECHO_REQUEST: #ECHO REQUEST
+            if icmpP.type == 8: #ECHO REQUEST
               print "Echo Request"
               # Reenviar al servidor 1
               msg = of.ofp_packet_out()
@@ -251,7 +250,9 @@ class LearningSwitch (object):
               msg.idle_timeout = 10
               msg.hard_timeout = 30
               msg.data = event.ofp          #FIXME: la linea siguiente peta seguro
-              msg.data.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
+              print str(dir(msg))
+	      print str(dir(msg.data))
+	      msg.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
               self.connection.send(msg)
               return
               #TODO: por gusto ver que esto funciona, pero los
