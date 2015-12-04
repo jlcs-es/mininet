@@ -26,6 +26,10 @@ from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.packet.arp import arp
 from pox.lib.packet.ipv4 import ipv4
+from pox.lib.packet.icmp import TYPE_ECHO_REQUEST
+from pox.lib.packet.ethernet import ethernet
+from pox.lib.packet.ethernet import ETHER_ANY
+from pox.lib.packet.ethernet import ARP_TYPE
 from pox.lib.util import dpid_to_str
 from pox.lib.util import str_to_bool
 import time
@@ -197,9 +201,27 @@ class LearningSwitch (object):
             Si es ICMP:
                 Si es TYPE_ECHO_REQUEST:
                     Reenviar a servidor 1. Se supone que lo usan para comprobar que el servidor web, principal servicio, está activo.
+    TODO FIX: enviar ARP announcements con la MAC del servidor elegido para balancear en el nuevo flujo, de modo que no tire los paquetes que no esperaba con su MAC cacheada del ARP REQUEST
             Resto:
                 No hacer nada extra de l2_learning
     """
+
+    def sendARPannouncement(self, mac, port, dst=ethernet.ETHER_ANY):
+      arp_reply = arp()
+      arp_reply.hwsrc = mac
+      arp_reply.hwdst = mac
+      arp_reply.opcode = arp.REPLY
+      arp_reply.protosrc = "10.0.0.101"
+      arp_reply.protodst = "10.0.0.101"
+      ether = ethernet()
+      ether.type = ethernet.ARP_TYPE
+      ether.dst = dst
+      ether.src = mac
+      ether.payload = arp_reply
+      msg = of.ofp_packet_out()
+      msg.actions.append(of.ofp_action_output(port = port))
+      msg.data = ether
+      self.connection.send(msg)
 
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
       if packet.type == packet.IP_TYPE: #Paquete IP
@@ -240,8 +262,10 @@ class LearningSwitch (object):
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: #ICMP
             print "Conexión ICMP"
             icmpP = ipP.next
-            if icmpP.type == 8: #ECHO REQUEST
+            if icmpP.type == icmp.TYPE_ECHO_REQUEST: #ECHO REQUEST
               print "Echo Request"
+
+              sendARPannouncement(srv_to_mac[1], event.port, packet.dst)
               # Reenviar al servidor 1
               msg = of.ofp_packet_out()
               #msg = of.ofp_flow_mod()
@@ -249,10 +273,8 @@ class LearningSwitch (object):
               msg.actions.append(of.ofp_action_output(port = srv_to_port[1]))
               msg.idle_timeout = 10
               msg.hard_timeout = 30
-              msg.data = event.ofp          #FIXME: la linea siguiente peta seguro
-              print str(dir(msg))
-	      print str(dir(msg.data))
-	      msg.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
+              msg.data = event.ofp
+	          msg.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
               self.connection.send(msg)
               return
               #TODO: por gusto ver que esto funciona, pero los
