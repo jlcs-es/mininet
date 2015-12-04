@@ -18,7 +18,7 @@
 An L2 learning switch.
 
 It is derived from one written live for an SDN crash course.
-It is somwhat similar to NOX's pyswitch in that it installs
+It is somewhat similar to NOX's pyswitch in that it installs
 exact-match rules for each flow.
 """
 
@@ -26,10 +26,11 @@ from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.packet.arp import arp
 from pox.lib.packet.ipv4 import ipv4
+from pox.lib.addresses import IPAddr
+from pox.lib.addresses import EthAddr
 from pox.lib.packet.icmp import TYPE_ECHO_REQUEST
 from pox.lib.packet.ethernet import ethernet
 from pox.lib.packet.ethernet import ETHER_ANY
-from pox.lib.packet.ethernet import ARP_TYPE
 from pox.lib.util import dpid_to_str
 from pox.lib.util import str_to_bool
 import time
@@ -206,13 +207,15 @@ class LearningSwitch (object):
                 No hacer nada extra de l2_learning
     """
 
-    def sendARPannouncement(self, mac, port, dst=ethernet.ETHER_ANY):
+    def sendARPannouncement(conn, m, port, dst=ETHER_ANY):
+      #print "mac: ", m, " port: ", port, " dst: ", dst
+      mac = EthAddr(m)
       arp_reply = arp()
       arp_reply.hwsrc = mac
       arp_reply.hwdst = mac
       arp_reply.opcode = arp.REPLY
-      arp_reply.protosrc = "10.0.0.101"
-      arp_reply.protodst = "10.0.0.101"
+      arp_reply.protosrc = IPAddr('10.0.0.101')
+      arp_reply.protodst = IPAddr('10.0.0.101')
       ether = ethernet()
       ether.type = ethernet.ARP_TYPE
       ether.dst = dst
@@ -221,7 +224,7 @@ class LearningSwitch (object):
       msg = of.ofp_packet_out()
       msg.actions.append(of.ofp_action_output(port = port))
       msg.data = ether
-      self.connection.send(msg)
+      conn.send(msg)
 
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
       if packet.type == packet.IP_TYPE: #Paquete IP
@@ -262,10 +265,10 @@ class LearningSwitch (object):
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: #ICMP
             print "Conexión ICMP"
             icmpP = ipP.next
-            if icmpP.type == icmp.TYPE_ECHO_REQUEST: #ECHO REQUEST
+            if icmpP.type == TYPE_ECHO_REQUEST: #ECHO REQUEST
               print "Echo Request"
 
-              sendARPannouncement(srv_to_mac[1], event.port, packet.dst)
+              sendARPannouncement(self.connection, srv_to_mac[1], event.port, packet.src)
               # Reenviar al servidor 1
               msg = of.ofp_packet_out()
               #msg = of.ofp_flow_mod()
@@ -274,7 +277,7 @@ class LearningSwitch (object):
               msg.idle_timeout = 10
               msg.hard_timeout = 30
               msg.data = event.ofp
-	          msg.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
+	      msg.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
               self.connection.send(msg)
               return
               #TODO: por gusto ver que esto funciona, pero los
