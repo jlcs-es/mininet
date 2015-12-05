@@ -235,15 +235,16 @@ class LearningSwitch (object):
                               nw_src = packet.next.srcip,
                               nw_dst = "10.0.0.101",
                               tp_dst = tp_port)
-      msg.idle_timeout = 10
-      msg.hard_timeout = 30
+      #msg.idle_timeout = 10
+      #msg.hard_timeout = 30
       msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
       msg.actions.append(of.ofp_action_dl_addr(5, srv_to_mac[srv])) # MAC PROXY
       msg.data = event.ofp
       self.connection.send(msg)
+      #core.openflow_discovery.install_flow(self.connection)
       # El flujo contrario: srv a cliente
-      msg = of.ofp_flow_mod()
-      msg.match = of.ofp_match(in_port = srv_to_port[srv],
+      msg2 = of.ofp_flow_mod()
+      msg2.match = of.ofp_match(in_port = srv_to_port[srv],
                               dl_src = srv_to_mac[srv],
                               dl_dst = packet.src,
                               dl_type = 0x800,
@@ -251,14 +252,13 @@ class LearningSwitch (object):
                               nw_dst = packet.next.srcip,
                               nw_src = "10.0.0.101",
                               tp_src = tp_port)
-      msg.match = msg.match.flip()
-      msg.match.in_port = srv_to_port[srv]
-      msg.idle_timeout = 10
-      msg.hard_timeout = 30
-      msg.actions.append(of.ofp_action_output(port = event.port))
-      msg.actions.append(of.ofp_action_dl_addr(4, packet.dst)) # MAC PROXY
-      msg.data = event.ofp
-      self.connection.send(msg)
+      #msg2.idle_timeout = 10
+      #msg2.hard_timeout = 30
+      msg2.actions.append(of.ofp_action_output(port = event.port))
+      msg2.actions.append(of.ofp_action_dl_addr(4, packet.dst)) # MAC PROXY
+      msg2.data = event.ofp
+      #self.connection.send(msg2)
+      #core.openflow.sendToDPID(event.dpid, msg2)
 
 
     def sendARPannouncement(conn, m, port, dst=ETHER_ANY):
