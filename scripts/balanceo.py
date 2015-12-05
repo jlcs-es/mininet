@@ -218,11 +218,12 @@ class LearningSwitch (object):
     def sendFlowToSrv(srv):
       msg = of.ofp_flow_mod()
       msg.match = of.ofp_match.from_packet(packet, event.port)
+      msg.match.dl_dst = EthAddr(srv_to_mac[srv])
       msg.idle_timeout = 10
       msg.hard_timeout = 30
       msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
       msg.data = event.ofp
-      msg.dst = srv_to_mac[srv] # Cambiar la MAC destino por la del servidor elegido
+      msg.dst = EthAddr(srv_to_mac[srv]) # Cambiar la MAC destino por la del servidor elegido
       self.connection.send(msg)
 
     def sendARPannouncement(conn, m, port, dst=ETHER_ANY):
