@@ -241,24 +241,24 @@ class LearningSwitch (object):
       msg.actions.append(of.ofp_action_dl_addr(5, srv_to_mac[srv])) # MAC PROXY
       msg.data = event.ofp
       self.connection.send(msg)
-      #core.openflow_discovery.install_flow(self.connection)
+
+    def flowToCli(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
       # El flujo contrario: srv a cliente
-      msg2 = of.ofp_flow_mod()
-      msg2.match = of.ofp_match(in_port = srv_to_port[srv],
+      msg = of.ofp_flow_mod()
+      msg.match = of.ofp_match(in_port = srv_to_port[srv],
                               dl_src = srv_to_mac[srv],
-                              dl_dst = packet.src,
+                              dl_dst = packet.dst, #El servidor conoce la mac e ip reales del cliente
                               dl_type = 0x800,
                               nw_proto = ipProto,
-                              nw_dst = packet.next.srcip,
+                              nw_dst = packet.next.dstip, 
                               nw_src = "10.0.0.101",
                               tp_src = tp_port)
-      #msg2.idle_timeout = 10
-      #msg2.hard_timeout = 30
-      msg2.actions.append(of.ofp_action_output(port = event.port))
-      msg2.actions.append(of.ofp_action_dl_addr(4, packet.dst)) # MAC PROXY
-      msg2.data = event.ofp
-      #self.connection.send(msg2)
-      #core.openflow.sendToDPID(event.dpid, msg2)
+      #msg.idle_timeout = 10
+      #msg.hard_timeout = 30
+      msg.actions.append(of.ofp_action_output(port = #FIXME: por qué puerto vino))
+      msg.actions.append(of.ofp_action_dl_addr(4, #FIXME: por cual preguntó)) # MAC PROXY
+      msg.data = event.ofp
+      self.connection.send(msg)
 
 
     def sendARPannouncement(conn, m, port, dst=ETHER_ANY):
@@ -297,7 +297,7 @@ class LearningSwitch (object):
             elif tcpP.dstport==443: # HTTPS
               print "Conexión HTTPS"
               srv = self.rr_webS()
-              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              #TODO: añadir en tabla mac cliente y mac pedida
               flowToSrv(srv, tp_port=443)
               return
             elif tcpP.dstport==22: # SSH
@@ -318,6 +318,22 @@ class LearningSwitch (object):
               return
           elif ipP.protocol==ipv4.UDP_PROTOCOL: #UDP
             print "Conexión UDP."
+
+        elif ipP.srcip == "10.0.0.101": # Flujo de vuelta desde el servidor
+          if ipP.protocol==ipv4.TCP_PROTOCOL:
+            tcpP = ipP.next
+            if tcpP.dstport==80: # HTTP
+              flowToCli(srv, tp_port=80)
+              return
+            elif tcpP.dstport==443: # HTTPS
+              flowToCli(srv, tp_port=443)
+              return
+            elif tcpP.dstport==22: # SSH
+              flowToCli(srv, tp_port=22)
+              return
+          elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
+            flowToCli(srv, ipProto=ipv4.ICMP_PROTOCOL)
+            return
         else:                                 #-RESTO-
             print "Conexión no TCP/UDP/ICMP"
       elif ( packet.type == packet.ARP_TYPE and     # ARP REQUEST
