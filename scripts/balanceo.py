@@ -41,21 +41,6 @@ log = core.getLogger()
 # Can be overriden on commandline.
 _flood_delay = 0
 
-
-srv_to_mac = {
-    1 : "00:00:00:00:01:01",
-    2 : "00:00:00:00:01:02",
-    3 : "00:00:00:00:01:03",
-    4 : "00:00:00:00:01:04",
-}
-
-srv_to_port = {
-    1 : 2,
-    2 : 3,
-    3 : 4,
-    4 : 5,
-}
-
 class LearningSwitch (object):
   """
   The learning switch "brain" associated with a single OpenFlow switch.
@@ -201,11 +186,44 @@ class LearningSwitch (object):
                 No hacer nada extra de l2_learning
             Si es ICMP:
                 Si es TYPE_ECHO_REQUEST:
-                    Reenviar a servidor 1. Se supone que lo usan para comprobar que el servidor web, principal servicio, está activo.
-    TODO FIX: enviar ARP announcements con la MAC del servidor elegido para balancear en el nuevo flujo, de modo que no tire los paquetes que no esperaba con su MAC cacheada del ARP REQUEST
+                    Reenviar a un servidor web. Se supone que lo usan para comprobar que el servidor web, principal servicio, está activo.
             Resto:
                 No hacer nada extra de l2_learning
     """
+    srv_to_mac = {
+        1 : "00:00:00:00:01:01",
+        2 : "00:00:00:00:01:02",
+        3 : "00:00:00:00:01:03",
+        4 : "00:00:00:00:01:04",
+    }
+
+    srv_to_port = {
+        1 : 2,
+        2 : 3,
+        3 : 4,
+        4 : 5,
+    }
+
+
+    #TODO: balanceo de carga
+    def rr_web():
+      return 1
+
+    def rr_webS():
+      return 2
+
+    def rr_ssh():
+      return 4
+
+    def sendFlowToSrv(srv):
+      msg = of.ofp_flow_mod()
+      msg.match = of.ofp_match.from_packet(packet, event.port)
+      msg.idle_timeout = 10
+      msg.hard_timeout = 30
+      msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
+      msg.data = event.ofp
+      msg.dst = srv_to_mac[srv] # Cambiar la MAC destino por la del servidor elegido
+      self.connection.send(msg)
 
     def sendARPannouncement(conn, m, port, dst=ETHER_ANY):
       #print "mac: ", m, " port: ", port, " dst: ", dst
@@ -226,62 +244,43 @@ class LearningSwitch (object):
       msg.data = ether
       conn.send(msg)
 
+    # Switch 2
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
-      if packet.type == packet.IP_TYPE: #Paquete IP
+      if packet.type == packet.IP_TYPE: # Paquete IP
         ipP = packet.next
-        if ipP.dstip == "10.0.0.101" : #Se dirige a los servidores
+        if ipP.dstip == "10.0.0.101" : # Se dirige a los servidores
           if ipP.protocol==ipv4.TCP_PROTOCOL:
             tcpP = ipP.next
-            if tcpP.dstport==80: #HTTP
+            if tcpP.dstport==80: # HTTP
               print "Conexión HTTP"
-              msg = of.ofp_flow_mod()
-              msg.match = of.ofp_match.from_packet(packet, event.port)
-              msg.idle_timeout = 10
-              msg.hard_timeout = 30
-              msg.actions.append(of.ofp_action_output(port = srv_to_port[2])) #TODO: elegir servidor bien
-              msg.data = event.ofp
-              self.connection.send(msg)
+              srv = rr_web()
+              # Actualizar la MAC que tiene el cliente en caché
+              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              # Crear flujo para dicha conexión
+              sendFlowToSrv(srv)
               return
-            elif tcpP.dstport==443: #HTTPS
+            elif tcpP.dstport==443: # HTTPS
               print "Conexión HTTPS"
-              msg = of.ofp_flow_mod()
-              msg.match = of.ofp_match.from_packet(packet, event.port)
-              msg.idle_timeout = 10
-              msg.hard_timeout = 30
-              msg.actions.append(of.ofp_action_output(port = srv_to_port[2])) #TODO: elegir servidor bien
-              msg.data = event.ofp
-              self.connection.send(msg)
+              srv = rr_webS()
+              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              sendFlowToSrv(srv)
               return
-            elif tcpP.dstport==22: #SSH
+            elif tcpP.dstport==22: # SSH
               print "Conexión SSH"
-              msg = of.ofp_flow_mod()
-              msg.match = of.ofp_match.from_packet(packet, event.port)
-              msg.idle_timeout = 10
-              msg.hard_timeout = 30
-              msg.actions.append(of.ofp_action_output(port = srv_to_port[2])) #TODO: elegir servidor bien
-              msg.data = event.ofp
-              self.connection.send(msg)
+              srv = rr_ssh()
+              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              sendFlowToSrv(srv)
               return
-          elif ipP.protocol==ipv4.ICMP_PROTOCOL: #ICMP
+          elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
             print "Conexión ICMP"
             icmpP = ipP.next
-            if icmpP.type == TYPE_ECHO_REQUEST: #ECHO REQUEST
+            if icmpP.type == TYPE_ECHO_REQUEST: # ECHO REQUEST
               print "Echo Request"
-
-              sendARPannouncement(self.connection, srv_to_mac[1], event.port, packet.src)
-              # Reenviar al servidor 1
-              msg = of.ofp_packet_out()
-              #msg = of.ofp_flow_mod()
-              #msg.match = of.ofp_match.from_packet(packet, event.port)
-              msg.actions.append(of.ofp_action_output(port = srv_to_port[1]))
-              msg.idle_timeout = 10
-              msg.hard_timeout = 30
-              msg.data = event.ofp
-	      msg.dst = srv_to_mac[1]  # Cambiar la MAC destino por la de srv_1
-              self.connection.send(msg)
+              # Reenviar a un servidor HTTP
+              srv = rr_web()
+              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              sendFlowToSrv(srv)
               return
-              #TODO: por gusto ver que esto funciona, pero los
-              #ARP REQUEST reenviarlos al srv_1 y listo.
           elif ipP.protocol==ipv4.UDP_PROTOCOL: #UDP
             print "Conexión UDP."
         else:                                 #-RESTO-
@@ -291,12 +290,11 @@ class LearningSwitch (object):
             packet.next.protodst == "10.0.0.101" ):
         print "ARP REQUEST"
         # Round-Robin
-        #msg = of.ofp_flow_mod()
-        #msg.match.dl_src = packet.src
-        msg = of.ofp_packet_out() # Reenviar ARP, no instalar flujo.
+        # Reenviar ARP, no crear flujo
+        # Cualquier tipo de flujo no tenido en cuenta antes (HTTP, HTTPS, ...)
+        # se reenvía por round robin a cualquier servidor
+        msg = of.ofp_packet_out()
         msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
-        #msg.idle_timeout = 10
-        #msg.hard_timeout = 30
         msg.data = event.ofp
         self.connection.send(msg)
         return
