@@ -225,20 +225,32 @@ class LearningSwitch (object):
         4 : 5,
     }
 
-    def flowToSrv(srv):
+    def flowToSrv(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
       msg = of.ofp_flow_mod()
-      msg.match = of.ofp_match.from_packet(packet, event.port)
-      #msg.match.dl_dst = EthAddr(srv_to_mac[srv])
+      msg.match = of.ofp_match(in_port = event.port,
+                              dl_src = packet.src,
+                              dl_dst = packet.dst,
+                              dl_type = 0x800, # Siempre trabajamos con IP
+                              nw_proto = ipProto,
+                              nw_src = packet.next.srcip,
+                              nw_dst = "10.0.0.101",
+                              tp_dst = tp_port)
       msg.idle_timeout = 10
       msg.hard_timeout = 30
       msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
       msg.actions.append(of.ofp_action_dl_addr(5, srv_to_mac[srv])) # MAC PROXY
       msg.data = event.ofp
-      #TODO check si no necesario: msg.dst = EthAddr(srv_to_mac[srv]) # Cambiar la MAC destino por la del servidor elegido
       self.connection.send(msg)
       # El flujo contrario: srv a cliente
       msg = of.ofp_flow_mod()
-      msg.match = of.ofp_match.from_packet(packet)
+      msg.match = of.ofp_match(in_port = srv_to_port[srv],
+                              dl_src = srv_to_mac[srv],
+                              dl_dst = packet.src,
+                              dl_type = 0x800,
+                              nw_proto = ipProto,
+                              nw_dst = packet.next.srcip,
+                              nw_src = "10.0.0.101",
+                              tp_src = tp_port)
       msg.match = msg.match.flip()
       msg.match.in_port = srv_to_port[srv]
       msg.idle_timeout = 10
@@ -280,19 +292,19 @@ class LearningSwitch (object):
               srv = self.rr_web()
               #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
               # Crear flujo para dicha conexión
-              flowToSrv(srv)
+              flowToSrv(srv, tp_port=80)
               return
             elif tcpP.dstport==443: # HTTPS
               print "Conexión HTTPS"
               srv = self.rr_webS()
               #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
-              flowToSrv(srv)
+              flowToSrv(srv, tp_port=443)
               return
             elif tcpP.dstport==22: # SSH
               print "Conexión SSH"
               srv = self.rr_ssh()
               #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
-              flowToSrv(srv)
+              flowToSrv(srv, tp_port=22)
               return
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
             print "Conexión ICMP"
@@ -302,7 +314,7 @@ class LearningSwitch (object):
               # Reenviar a un servidor HTTP
               srv = self.rr_web()
               #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
-              flowToSrv(srv)
+              flowToSrv(srv, ipProto=ipv4.ICMP_PROTOCOL)
               return
           elif ipP.protocol==ipv4.UDP_PROTOCOL: #UDP
             print "Conexión UDP."
