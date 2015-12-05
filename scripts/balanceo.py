@@ -104,11 +104,36 @@ class LearningSwitch (object):
     self.max_srvs = 4
     self.frst_prt = 2
 
+    self.rrweb = 0
+    self.web = [1, 1, 2, 3]
+    self.rrwebs = 0
+    self.webs = [2, 3]
+    self.rrssh = 0
+    self.ssh = [2, 4, 4, 4, 4]
+
+    self.macToSrvWeb = {}
+    self.macToSrvWebS = {}
+    self.macToSrvSsh = {}
 
   def roundRobin(self):
     rr = (self.round_robin%self.max_srvs) + self.frst_prt
     self.round_robin+=1
     return rr
+
+  def rr_web(self):
+    rr = self.rrweb % len(web)
+    rrweb+=1
+    return web[rr]
+
+  def rr_webS(self):
+    rr = self.rrwebs % len(webs)
+    rrwebs+=1
+    return webs[rr]
+
+  def rr_ssh(self):
+    rr = self.rrssh % len(ssh)
+    rrssh+=1
+    return ssh[rr]
 
   def _handle_PacketIn (self, event):
     """
@@ -116,10 +141,6 @@ class LearningSwitch (object):
     """
 
     packet = event.parsed
-
-
-    global srv_to_mac
-    global srv_to_port
 
     def flood (message = None):
       """ Floods the packet """
@@ -177,9 +198,9 @@ class LearningSwitch (object):
                 Reenviar a cualquiera, pero NO CREAR FLUJO, sólo reenviar, me sirve round-robin para resto de conexiones NO CONSIDERADAS, de modo que el round-robin resuelve la MAC para la caché del cliente.
             Si es TCP:
                 Si es a puerto 80:
-                    Reenviar a servidores 1 a 3. Al 1 más conexiones, peso de 2 frente a 1.
+                    Reenviar a servidores 1 a 3. Al 1 más conexiones, peso de 2 frente a 1, 1.
                 Si es a puerto 22:
-                    Reenviar a servidor 2 o 4. Al 4 más conexiones, peso de 5 frente a 1.
+                    Reenviar a servidor 2 o 4. Al 4 más conexiones, peso de 4 frente a 1.
                 Si es a puerto 443:
                     Reenviar a servidor 2 o 3. Igual pesos.
             Si es UDP:
@@ -204,27 +225,29 @@ class LearningSwitch (object):
         4 : 5,
     }
 
-
-    #TODO: balanceo de carga
-    def rr_web():
-      return 1
-
-    def rr_webS():
-      return 2
-
-    def rr_ssh():
-      return 4
-
-    def sendFlowToSrv(srv):
+    def flowToSrv(srv):
       msg = of.ofp_flow_mod()
       msg.match = of.ofp_match.from_packet(packet, event.port)
-      msg.match.dl_dst = EthAddr(srv_to_mac[srv])
+      #msg.match.dl_dst = EthAddr(srv_to_mac[srv])
       msg.idle_timeout = 10
       msg.hard_timeout = 30
       msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
+      msg.actions.append(of.ofp_action_dl_addr(of.OFPAT_SET_DL_DST, srv_to_mac[srv])) # MAC PROXY
       msg.data = event.ofp
-      msg.dst = EthAddr(srv_to_mac[srv]) # Cambiar la MAC destino por la del servidor elegido
+      #TODO check si no necesario: msg.dst = EthAddr(srv_to_mac[srv]) # Cambiar la MAC destino por la del servidor elegido
       self.connection.send(msg)
+      # El flujo contrario: srv a cliente
+      msg = of.ofp_flow_mod()
+      msg.match = of.ofp_match.from_packet(packet)
+      msg.match = msg.match.flip()
+      msg.match.in_port = srv_to_port[srv]
+      msg.idle_timeout = 10
+      msg.hard_timeout = 30
+      msg.actions.append(of.ofp_action_output(port = event.port)
+      msg.actions.append(of.ofp_action_dl_addr(of.OFPAT_SET_DL_SRC, packet.dst)) # MAC PROXY
+      msg.data = event.ofp
+      self.connection.send(msg)
+
 
     def sendARPannouncement(conn, m, port, dst=ETHER_ANY):
       #print "mac: ", m, " port: ", port, " dst: ", dst
@@ -255,22 +278,21 @@ class LearningSwitch (object):
             if tcpP.dstport==80: # HTTP
               print "Conexión HTTP"
               srv = rr_web()
-              # Actualizar la MAC que tiene el cliente en caché
-              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
               # Crear flujo para dicha conexión
-              sendFlowToSrv(srv)
+              flowToSrv(srv)
               return
             elif tcpP.dstport==443: # HTTPS
               print "Conexión HTTPS"
               srv = rr_webS()
-              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
-              sendFlowToSrv(srv)
+              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              flowToSrv(srv)
               return
             elif tcpP.dstport==22: # SSH
               print "Conexión SSH"
               srv = rr_ssh()
-              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
-              sendFlowToSrv(srv)
+              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              flowToSrv(srv)
               return
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
             print "Conexión ICMP"
@@ -279,8 +301,8 @@ class LearningSwitch (object):
               print "Echo Request"
               # Reenviar a un servidor HTTP
               srv = rr_web()
-              sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
-              sendFlowToSrv(srv)
+              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              flowToSrv(srv)
               return
           elif ipP.protocol==ipv4.UDP_PROTOCOL: #UDP
             print "Conexión UDP."
