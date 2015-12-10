@@ -1,27 +1,5 @@
 # -*- encoding: utf-8 -*-
 
-# Copyright 2011-2012 James McCauley
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at:
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-"""
-An L2 learning switch.
-
-It is derived from one written live for an SDN crash course.
-It is somewhat similar to NOX's pyswitch in that it installs
-exact-match rules for each flow.
-"""
-
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.packet.arp import arp
@@ -36,52 +14,10 @@ from pox.lib.util import str_to_bool
 import time
 
 log = core.getLogger()
-
-# We don't want to flood immediately when a switch connects.
-# Can be overriden on commandline.
 _flood_delay = 0
 
 class LearningSwitch (object):
-  """
-  The learning switch "brain" associated with a single OpenFlow switch.
 
-  When we see a packet, we'd like to output it on a port which will
-  eventually lead to the destination.  To accomplish this, we build a
-  table that maps addresses to ports.
-
-  We populate the table by observing traffic.  When we see a packet
-  from some source coming from some port, we know that source is out
-  that port.
-
-  When we want to forward traffic, we look up the desintation in our
-  table.  If we don't know the port, we simply send the message out
-  all ports except the one it came in on.  (In the presence of loops,
-  this is bad!).
-
-  In short, our algorithm looks like this:
-
-  For each packet from the switch:
-  1) Use source address and switch port to update address/port table
-  2) Is transparent = False and either Ethertype is LLDP or the packet's
-     destination address is a Bridge Filtered address?
-     Yes:
-        2a) Drop packet -- don't forward link-local traffic (LLDP, 802.1x)
-            DONE
-  3) Is destination multicast?
-     Yes:
-        3a) Flood the packet
-            DONE
-  4) Port for destination address in our address/port table?
-     No:
-        4a) Flood the packet
-            DONE
-  5) Is output port the same as input port?
-     Yes:
-        5a) Drop packet and similar ones for a while
-  6) Install flow table entry in the switch so that this
-     flow goes out the appopriate port
-     6a) Send the packet out appropriate port
-  """
   def __init__ (self, connection, transparent):
     # Switch we'll be adding L2 learning switch capabilities to
     self.connection = connection
@@ -97,9 +33,7 @@ class LearningSwitch (object):
     # We just use this to know when to log a helpful message
     self.hold_down_expired = _flood_delay == 0
 
-    #log.debug("Initializing LearningSwitch, transparent=%s",
-    #          str(self.transparent))
-
+    #Tablas de aprendizaje, round_robin balanceado y proxy:
     self.round_robin = 0
     self.max_srvs = 4
     self.frst_prt = 2
@@ -118,6 +52,7 @@ class LearningSwitch (object):
     self.macToSrvSsh = {}
     self.macToSrvICMP = {}
 
+  #Funciones para round robin con pesos:
   def roundRobin(self):
     rr = (self.round_robin%self.max_srvs) + self.frst_prt
     self.round_robin+=1
@@ -143,10 +78,8 @@ class LearningSwitch (object):
     self.rrssh+=1
     return self.ssh[rr]
 
+  #Evento de nuevo paquete:
   def _handle_PacketIn (self, event):
-    """
-    Handle packet in messages from the switch to implement above algorithm.
-    """
 
     packet = event.parsed
 
@@ -163,22 +96,14 @@ class LearningSwitch (object):
               dpid_to_str(event.dpid))
 
         if message is not None: log.debug(message)
-        #log.debug("%i: flood %s -> %s", event.dpid,packet.src,packet.dst)
-        # OFPP_FLOOD is optional; on some switches you may need to change
-        # this to OFPP_ALL.
         msg.actions.append(of.ofp_action_output(port = of.OFPP_FLOOD))
       else:
         pass
-        #log.info("Holding down flood for %s", dpid_to_str(event.dpid))
       msg.data = event.ofp
       msg.in_port = event.port
       self.connection.send(msg)
 
     def drop (duration = None):
-      """
-      Drops this packet and optionally installs a flow to continue
-      dropping similar ones for a while
-      """
       if duration is not None:
         if not isinstance(duration, tuple):
           duration = (duration,duration)
@@ -214,10 +139,9 @@ class LearningSwitch (object):
             Si es UDP:
                 No hacer nada extra de l2_learning
             Si es ICMP:
-                Si es TYPE_ECHO_REQUEST:
-                    Reenviar a un servidor web. Se supone que lo usan para comprobar que el servidor web, principal servicio, está activo.
+                Balanceo paralelo, pero configurado igual que HTTP, pues lo esperado es que los clientes hagan ping para ver si la web está activa.
             Resto:
-                No hacer nada extra de l2_learning
+                "Delegar" en l2_learning
     """
     srv_to_mac = {
         1 : "00:00:00:00:01:01",
@@ -233,6 +157,7 @@ class LearningSwitch (object):
         4 : 5,
     }
 
+    #Instala flujo con proxy mac del srv desde un cliente
     def flowToSrv(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
       print "Flujo de cli=", packet.src, " asking for ", packet.dst, " proxy a srv=", srv
       msg = of.ofp_flow_mod()
@@ -251,6 +176,7 @@ class LearningSwitch (object):
       msg.data = event.ofp
       self.connection.send(msg)
 
+    #Instala flujo con proxy mac del srv hacia un cliente
     def flowToCli(srvmac, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
       print "Flujo de srv=", packet.src, " a cli=", packet.dst, " asking for ", srvmac
       # El flujo contrario: srv a cliente
@@ -271,6 +197,7 @@ class LearningSwitch (object):
       self.connection.send(msg)
 
 
+    #No usado, envía un ARP announcement, usado en pruebas de detectar flujo
     def sendARPannouncement(conn, m, port, dst=ETHER_ANY):
       #print "mac: ", m, " port: ", port, " dst: ", dst
       mac = EthAddr(m)
@@ -290,24 +217,26 @@ class LearningSwitch (object):
       msg.data = ether
       conn.send(msg)
 
-    # Switch 2
+    # DETECCION DE FLUJOS
+    # Estamos en el Switch 2
     if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
       if packet.type == packet.IP_TYPE: # Paquete IP
         ipP = packet.next
         if ipP.dstip == "10.0.0.101" : # Se dirige a los servidores
-          if ipP.protocol==ipv4.TCP_PROTOCOL:
+          if ipP.protocol==ipv4.TCP_PROTOCOL: # TCP vs ICMP vs UDP
             tcpP = ipP.next
             if tcpP.dstport==80: # HTTP
               print "Conexión HTTP"
+              #Calcular por round robin balanceado el servidor a reenviar el tráfico
               srv = self.rr_web()
+              #Guardamos por qué mac preguntaba el cliente antes de aplicar proxy
               self.macToSrvWeb[packet.src] = packet.dst
-              # Crear flujo para dicha conexión
+              #Flujo desde el cliente al servidor aplicando proxy mac del srv
               flowToSrv(srv, tp_port=80)
               return
             elif tcpP.dstport==443: # HTTPS
               print "Conexión HTTPS"
               srv = self.rr_webS()
-              #TODO: añadir en tabla mac cliente y mac pedida
               self.macToSrvWebS[packet.src] = packet.dst
               flowToSrv(srv, tp_port=443)
               return
@@ -315,21 +244,16 @@ class LearningSwitch (object):
               print "Conexión SSH"
               srv = self.rr_ssh()
               self.macToSrvSsh[packet.src] = packet.dst
-              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
               flowToSrv(srv, tp_port=22)
               return
-          elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
+          elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP vs TCP vs UDP
             print "Conexión ICMP"
             icmpP = ipP.next
-            if icmpP.type == TYPE_ECHO_REQUEST: # ECHO REQUEST
-              print "Echo Request"
-              # Reenviar a un servidor HTTP
-              self.macToSrvICMP[packet.src] = packet.dst
-              srv = self.rr_icmp()
-              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
-              flowToSrv(srv, ipProto=ipv4.ICMP_PROTOCOL)
-              return
-          elif ipP.protocol==ipv4.UDP_PROTOCOL: #UDP
+            self.macToSrvICMP[packet.src] = packet.dst
+            srv = self.rr_icmp()
+            flowToSrv(srv, ipProto=ipv4.ICMP_PROTOCOL)
+            return
+          elif ipP.protocol==ipv4.UDP_PROTOCOL: #UDP. No hacer nada
             print "Conexión UDP."
 
         elif ipP.srcip == "10.0.0.101": # Flujo de vuelta desde el servidor
@@ -337,7 +261,8 @@ class LearningSwitch (object):
             tcpP = ipP.next
             if tcpP.dstport==80: # HTTP
               print "Srv HTTP reply: srv=", packet.src
-              flowToCli(self.macToSrvWeb[packet.dst], tp_port = 80) #Paso la mac por la que preguntó el cliente
+              #Paso la mac por la que preguntó el cliente, para deshacer proxy mac
+              flowToCli(self.macToSrvWeb[packet.dst], tp_port = 80)
               return
             elif tcpP.dstport==443: # HTTPS
               print "Srv HTTPS reply: srv=", packet.src
