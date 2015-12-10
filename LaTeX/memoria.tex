@@ -265,8 +265,6 @@ srv_4 -> X X X cli_4 X X srv_1 srv_2 srv_3
 
 \subsection{Tráfico y flujos}
 
-%TODO: tráfico en el lado de los servidores: sólo analizar de wireshark los servidores
-
 Tráfico analizado con wireshark:
 
 \hfil
@@ -396,6 +394,128 @@ cookie=0x0, duration=103.169s, table=0, n_packets=24, n_bytes=1512, idle_age=14,
 cookie=0x0, duration=93.593s, table=0, n_packets=23, n_bytes=1470, idle_age=8,
  dl_src=0a:27:a9:ce:34:da actions=output:5
 \end{Verbatim}
+
+
+
+\section{Contribución opcional 2: 4-Balanceo complejo}
+
+\begin{BVerbatim}
+Idea:   Si es ARP REQUEST:
+		Reenviar a cualquiera, pero NO CREAR FLUJO, sólo reenviar, me
+		sirve round-robin para resto de conexiones NO CONSIDERADAS, de
+		modo que el round-robin resuelve la MAC para la caché del cliente.
+	Si es TCP:
+		Si es a puerto 80:
+		Reenviar a servidores 1 a 3. Al 1 más conexiones, peso de 2 frente a 1, 1.
+		Si es a puerto 22:
+		Reenviar a servidor 2 o 4. Al 4 más conexiones, peso de 4 frente a 1.
+		Si es a puerto 443:
+		Reenviar a servidor 2 o 3. Igual pesos.
+	Si es UDP:
+		No hacer nada extra de l2_learning
+	Si es ICMP:
+		Balanceo independiente, pero configurado igual que HTTP, pues lo 
+		esperado es que los clientes hagan ping para ver si la web está activa.
+	Resto:
+		"Delegar" en l2_learning
+\end{BVerbatim}
+
+\begin{lstlisting}[language=Python]
+self.rrweb = 0
+self.web = [1, 1, 2, 3]
+
+
+def roundRobin(self):
+	rr = (self.round_robin%self.max_srvs) + self.frst_prt
+	self.round_robin+=1
+	return rr
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python]
+#Instala flujo con proxy mac del srv desde un cliente
+def flowToSrv(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
+	print "Flujo de cli=", packet.src, " asking for ", packet.dst, " proxy a srv=", srv
+	msg = of.ofp_flow_mod()
+	msg.match = of.ofp_match(in_port = event.port,
+								dl_src = packet.src,
+								dl_dst = packet.dst,
+								dl_type = 0x800, # Siempre trabajamos con IP
+								nw_proto = ipProto,
+								nw_src = packet.next.srcip,
+								nw_dst = "10.0.0.101",
+								tp_dst = tp_port)
+	#msg.idle_timeout = 10
+	#msg.hard_timeout = 30
+	msg.actions.append(of.ofp_action_dl_addr(5, srv_to_mac[srv])) # MAC PROXY
+	msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
+	msg.data = event.ofp
+	self.connection.send(msg)
+\end{lstlisting}
+
+
+\begin{lstlisting}[language=Python]
+# DETECCION DE FLUJOS
+# Estamos en el Switch 2
+if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
+	if packet.type == packet.IP_TYPE: # Paquete IP
+		ipP = packet.next
+		if ipP.dstip == "10.0.0.101" : # Se dirige a los servidores
+			if ipP.protocol==ipv4.TCP_PROTOCOL: # TCP vs ICMP vs UDP
+				tcpP = ipP.next
+				if tcpP.dstport==80: # HTTP
+					print "Conexion HTTP"
+					#Calcular por round robin balanceado el 
+					#servidor a reenviar el trafico
+					srv = self.rr_web()
+					#Guardamos por que mac preguntaba el cliente antes de aplicar proxy
+					self.macToSrvWeb[packet.src] = packet.dst
+					#Flujo desde el cliente al servidor aplicando proxy mac del srv
+					flowToSrv(srv, tp_port=80)
+					return
+				elif tcpP.dstport==443: # HTTPS
+				[...]
+\end{lstlisting}
+
+
+
+\begin{lstlisting}[language=Python]
+[...]
+elif ipP.srcip == "10.0.0.101": # Flujo de vuelta desde el servidor
+	if ipP.protocol==ipv4.TCP_PROTOCOL:
+		tcpP = ipP.next
+		if tcpP.dstport==80: # HTTP
+			print "Srv HTTP reply: srv=", packet.src
+			#Paso la mac por la que pregunto el cliente, para deshacer proxy mac
+			flowToCli(self.macToSrvWeb[packet.dst], tp_port = 80)
+			return
+		elif tcpP.dstport==443: # HTTPS
+\end{lstlisting}
+
+
+
+\begin{lstlisting}[language=Python]
+[...]
+elif ( packet.type == packet.ARP_TYPE and     # ARP REQUEST
+		packet.next.opcode == arp.REQUEST and
+		packet.next.protodst == "10.0.0.101" ):
+	print "ARP REQUEST"
+	# Round-Robin
+	# Reenviar ARP, no crear flujo
+	# Cualquier tipo de flujo no tenido en cuenta antes (HTTP, HTTPS, ...)
+	# se reenvia por round robin a cualquier servidor
+	msg = of.ofp_packet_out()
+	msg.actions.append(of.ofp_action_output(port = self.roundRobin()))
+	msg.data = event.ofp
+	self.connection.send(msg)
+	return
+\end{lstlisting}
+
+
+
+
+
+
+
 
 \appendix
 \section{Test ping}
