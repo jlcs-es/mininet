@@ -110,10 +110,13 @@ class LearningSwitch (object):
     self.webs = [2, 3]
     self.rrssh = 0
     self.ssh = [2, 4, 4, 4, 4]
+    self.rricmp = 0
+    self.icmp = [1, 1, 2, 3]
 
     self.macToSrvWeb = {}
     self.macToSrvWebS = {}
     self.macToSrvSsh = {}
+    self.macToSrvICMP = {}
 
   def roundRobin(self):
     rr = (self.round_robin%self.max_srvs) + self.frst_prt
@@ -129,6 +132,11 @@ class LearningSwitch (object):
     rr = self.rrwebs % len(self.webs)
     self.rrwebs+=1
     return self.webs[rr]
+
+  def rr_icmp(self):
+    rr = self.rricmp % len(self.icmp)
+    self.rricmp+=1
+    return self.icmp[rr]
 
   def rr_ssh(self):
     rr = self.rrssh % len(self.ssh)
@@ -242,7 +250,7 @@ class LearningSwitch (object):
       msg.data = event.ofp
       self.connection.send(msg)
 
-    def flowToCli(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
+    def flowToCli(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL, srvmac):
       # El flujo contrario: srv a cliente
       msg = of.ofp_flow_mod()
       msg.match = of.ofp_match(in_port = srv_to_port[srv],
@@ -250,13 +258,13 @@ class LearningSwitch (object):
                               dl_dst = packet.dst, #El servidor conoce la mac e ip reales del cliente
                               dl_type = 0x800,
                               nw_proto = ipProto,
-                              nw_dst = packet.next.dstip, 
+                              nw_dst = packet.next.dstip,
                               nw_src = "10.0.0.101",
                               tp_src = tp_port)
       #msg.idle_timeout = 10
       #msg.hard_timeout = 30
-      msg.actions.append(of.ofp_action_output(port = #FIXME: por qué puerto vino))
-      msg.actions.append(of.ofp_action_dl_addr(4, #FIXME: por cual preguntó)) # MAC PROXY
+      msg.actions.append(of.ofp_action_output(port = macToPort[packet.dst])) #Lo aprendió en la consulta
+      msg.actions.append(of.ofp_action_dl_addr(4, srvmac)) # MAC PROXY
       msg.data = event.ofp
       self.connection.send(msg)
 
@@ -290,7 +298,7 @@ class LearningSwitch (object):
             if tcpP.dstport==80: # HTTP
               print "Conexión HTTP"
               srv = self.rr_web()
-              #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
+              self.macToSrvWeb[packet.src] = packet.dst
               # Crear flujo para dicha conexión
               flowToSrv(srv, tp_port=80)
               return
@@ -298,11 +306,13 @@ class LearningSwitch (object):
               print "Conexión HTTPS"
               srv = self.rr_webS()
               #TODO: añadir en tabla mac cliente y mac pedida
+              self.macToSrvWebS[packet.src] = packet.dst
               flowToSrv(srv, tp_port=443)
               return
             elif tcpP.dstport==22: # SSH
               print "Conexión SSH"
               srv = self.rr_ssh()
+              self.macToSrvSsh[packet.src] = packet.dst
               #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
               flowToSrv(srv, tp_port=22)
               return
@@ -312,7 +322,8 @@ class LearningSwitch (object):
             if icmpP.type == TYPE_ECHO_REQUEST: # ECHO REQUEST
               print "Echo Request"
               # Reenviar a un servidor HTTP
-              srv = self.rr_web()
+              self.macToSrvICMP[packet.src] = packet.dst
+              srv = self.rr_icmp()
               #sendARPannouncement(self.connection, srv_to_mac[srv], event.port, packet.src)
               flowToSrv(srv, ipProto=ipv4.ICMP_PROTOCOL)
               return
@@ -323,16 +334,16 @@ class LearningSwitch (object):
           if ipP.protocol==ipv4.TCP_PROTOCOL:
             tcpP = ipP.next
             if tcpP.dstport==80: # HTTP
-              flowToCli(srv, tp_port=80)
+              flowToCli(srv, tp_port = 80, srvmac=self.macToSrvWeb[packet.dst]) #Paso la mac por la que preguntó el cliente
               return
             elif tcpP.dstport==443: # HTTPS
-              flowToCli(srv, tp_port=443)
+              flowToCli(srv, tp_port = 443, srvmac=self.macToSrvWebS[packet.dst])
               return
             elif tcpP.dstport==22: # SSH
-              flowToCli(srv, tp_port=22)
+              flowToCli(srv, tp_port = 22, srvmac=self.macToSrvSsh[packet.dst])
               return
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
-            flowToCli(srv, ipProto=ipv4.ICMP_PROTOCOL)
+            flowToCli(srv, ipProto=ipv4.ICMP_PROTOCOL, srvmac=self.macToSrvICMP[packet.dst])
             return
         else:                                 #-RESTO-
             print "Conexión no TCP/UDP/ICMP"
