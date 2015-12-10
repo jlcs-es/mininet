@@ -250,11 +250,11 @@ class LearningSwitch (object):
       msg.data = event.ofp
       self.connection.send(msg)
 
-    def flowToCli(srv, srvmac, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
+    def flowToCli(srvmac, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
       # El flujo contrario: srv a cliente
       msg = of.ofp_flow_mod()
-      msg.match = of.ofp_match(in_port = srv_to_port[srv],
-                              dl_src = srv_to_mac[srv],
+      msg.match = of.ofp_match(in_port = event.port,
+                              dl_src = packet.src,
                               dl_dst = packet.dst, #El servidor conoce la mac e ip reales del cliente
                               dl_type = 0x800,
                               nw_proto = ipProto,
@@ -334,16 +334,16 @@ class LearningSwitch (object):
           if ipP.protocol==ipv4.TCP_PROTOCOL:
             tcpP = ipP.next
             if tcpP.dstport==80: # HTTP
-              flowToCli(srv, self.macToSrvWeb[packet.dst], tp_port = 80) #Paso la mac por la que preguntó el cliente
+              flowToCli(self.macToSrvWeb[packet.dst], tp_port = 80) #Paso la mac por la que preguntó el cliente
               return
             elif tcpP.dstport==443: # HTTPS
-              flowToCli(srv, self.macToSrvWebS[packet.dst], tp_port = 443)
+              flowToCli(self.macToSrvWebS[packet.dst], tp_port = 443)
               return
             elif tcpP.dstport==22: # SSH
-              flowToCli(srv, self.macToSrvSsh[packet.dst], tp_port = 22)
+              flowToCli(self.macToSrvSsh[packet.dst], tp_port = 22)
               return
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
-            flowToCli(srv, self.macToSrvICMP[packet.dst], ipProto=ipv4.ICMP_PROTOCOL)
+            flowToCli(self.macToSrvICMP[packet.dst], ipProto=ipv4.ICMP_PROTOCOL)
             return
         else:                                 #-RESTO-
             print "Conexión no TCP/UDP/ICMP"
