@@ -234,7 +234,7 @@ class LearningSwitch (object):
     }
 
     def flowToSrv(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
-      print "Flujo de cli=", packet.cli, " asking for ", packet.dst, " proxy a srv=", srv 
+      print "Flujo de cli=", packet.src, " asking for ", packet.dst, " proxy a srv=", srv 
       msg = of.ofp_flow_mod()
       msg.match = of.ofp_match(in_port = event.port,
                               dl_src = packet.src,
