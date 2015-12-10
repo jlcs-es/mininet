@@ -246,8 +246,8 @@ class LearningSwitch (object):
                               tp_dst = tp_port)
       #msg.idle_timeout = 10
       #msg.hard_timeout = 30
-      msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
       msg.actions.append(of.ofp_action_dl_addr(5, srv_to_mac[srv])) # MAC PROXY
+      msg.actions.append(of.ofp_action_output(port = srv_to_port[srv]))
       msg.data = event.ofp
       self.connection.send(msg)
 
@@ -265,8 +265,8 @@ class LearningSwitch (object):
                               tp_src = tp_port)
       #msg.idle_timeout = 10
       #msg.hard_timeout = 30
-      msg.actions.append(of.ofp_action_output(port = self.macToPort[packet.dst])) #Lo aprendió en la consulta
       msg.actions.append(of.ofp_action_dl_addr(4, srvmac)) # MAC PROXY
+      msg.actions.append(of.ofp_action_output(port = self.macToPort[packet.dst])) #Lo aprendió en la consulta
       msg.data = event.ofp
       self.connection.send(msg)
 
