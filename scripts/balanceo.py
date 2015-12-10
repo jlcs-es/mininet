@@ -234,6 +234,7 @@ class LearningSwitch (object):
     }
 
     def flowToSrv(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
+      print "Flujo de cli=", packet.cli, " asking for ", packet.dst, " proxy a srv=", srv 
       msg = of.ofp_flow_mod()
       msg.match = of.ofp_match(in_port = event.port,
                               dl_src = packet.src,
@@ -251,6 +252,7 @@ class LearningSwitch (object):
       self.connection.send(msg)
 
     def flowToCli(srvmac, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
+      print "Flujo de srv=", packet.src, " a cli=", packet.cli, " asking for ", srvmac
       # El flujo contrario: srv a cliente
       msg = of.ofp_flow_mod()
       msg.match = of.ofp_match(in_port = event.port,
@@ -334,15 +336,19 @@ class LearningSwitch (object):
           if ipP.protocol==ipv4.TCP_PROTOCOL:
             tcpP = ipP.next
             if tcpP.dstport==80: # HTTP
+              print "Srv HTTP reply: srv=", packet.src
               flowToCli(self.macToSrvWeb[packet.dst], tp_port = 80) #Paso la mac por la que preguntó el cliente
               return
             elif tcpP.dstport==443: # HTTPS
+              print "Srv HTTPS reply: srv=", packet.src
               flowToCli(self.macToSrvWebS[packet.dst], tp_port = 443)
               return
             elif tcpP.dstport==22: # SSH
+              print "Srv SSH reply: srv=", packet.src
               flowToCli(self.macToSrvSsh[packet.dst], tp_port = 22)
               return
           elif ipP.protocol==ipv4.ICMP_PROTOCOL: # ICMP
+            print "Srv ICMP reply: srv=", packet.src
             flowToCli(self.macToSrvICMP[packet.dst], ipProto=ipv4.ICMP_PROTOCOL)
             return
         else:                                 #-RESTO-
