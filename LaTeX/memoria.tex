@@ -49,13 +49,7 @@
 \begin{document}
 \maketitle
 
-\begin{abstract}
-
-\end{abstract}
-
 \tableofcontents
-
-\section{Introducción}
 
 \section{Topología mininet}
 
@@ -300,7 +294,7 @@ En el servidor 2 ocurre lo mismo que en el 1 pero con los clientes 2 y 6 que le 
 \hfill
 
 \begin{center}
-	\includegraphics[scale=0.5]{images/srv3.png}
+	\includegraphics[scale=0.48]{images/srv3.png}
 \end{center}
 
 En el servidor 3 ocurren \textit{tres cuartos de lo mismo} que en el resto pero con sólo el cliente 3. En esta captura aprovecho para comentar lo que ocurre en los 4 servidores, pero que se ve en la imagen: wireshark detecta una IP duplicada en la red. Lo descubre porque en un ARP reply previo la IP y MAC destino eran la del servidor 3, pero el ARP request donde se detecta la duplicidad proviene de otro servidor, en la traza 24 corresponde a srv\_1, en la 39 al srv\_2, etc.
@@ -380,7 +374,9 @@ cookie=0x0, duration=8.666s, table=0, n_packets=1, n_bytes=42, idle_timeout=10,
 *** s2 ------------------------------------------------------------------------
 NXST_FLOW reply (xid=0x4):
 cookie=0x0, duration=8.673s, table=0, n_packets=1, n_bytes=42, idle_timeout=10,
- hard_timeout=30, idle_age=8, priority=65535,arp,in_port=5,vlan_tci=0x0000,dl_src=00:00:00:00:01:04,dl_dst=0a:27:a9:ce:34:da,arp_spa=10.0.0.101,arp_tpa=10.0.0.4,arp_op=1 actions=output:1
+ hard_timeout=30, idle_age=8, priority=65535,arp,in_port=5,vlan_tci=0x0000,
+ dl_src=00:00:00:00:01:04,dl_dst=0a:27:a9:ce:34:da,
+ arp_spa=10.0.0.101,arp_tpa=10.0.0.4,arp_op=1 actions=output:1
 cookie=0x0, duration=117.856s, table=0, n_packets=26, n_bytes=1596, idle_age=20,
  dl_src=ba:b9:7f:25:67:db actions=output:2
 cookie=0x0, duration=110.578s, table=0, n_packets=25, n_bytes=1554, idle_age=17,
@@ -399,26 +395,39 @@ cookie=0x0, duration=93.593s, table=0, n_packets=23, n_bytes=1470, idle_age=8,
 
 \section{Contribución opcional 2: 4-Balanceo complejo}
 
+Para la mejora del balanceo complejo primero hay que definir qué tipo de tráfico se balanceará, y para eso hay que saber qué servicios ofrecerían los servidores.
+
+En este caso supongo que entre los 4 servidores dan servicio HTTP, HTTPS y SSH, además de aceptar mensajes ICMP, que se reenviarían a servidores HTTP pues se considera que los clientes hacen ping a la web para ver si está activa.
+
+La toma de decisiones de balanceo según el tipo de tráfico se explica a continuación en el esquema. En resumen, no todas las máquinas dan todos los servicios, y además se establecen pesos para compensar, por ejemplo, que el srv\_4 sólo ofrece SSH, mientras que srv\_2 ofrece todos.
+
 \begin{BVerbatim}
-Idea:   Si es ARP REQUEST:
-		Reenviar a cualquiera, pero NO CREAR FLUJO, sólo reenviar, me
-		sirve round-robin para resto de conexiones NO CONSIDERADAS, de
-		modo que el round-robin resuelve la MAC para la caché del cliente.
+Balanceo:
+Si es ARP REQUEST a 10.0.0.101:
+	Reenviar por round-robin, pero NO CREAR FLUJO, sólo reenviar.
+Si es paquete IPv4:
 	Si es TCP:
 		Si es a puerto 80:
-		Reenviar a servidores 1 a 3. Al 1 más conexiones, peso de 2 frente a 1, 1.
+			Flujo a servidores 1 a 3. Pesos {1, 1, 2, 3}.
 		Si es a puerto 22:
-		Reenviar a servidor 2 o 4. Al 4 más conexiones, peso de 4 frente a 1.
+			Flujo a servidor 2 o 4. Pesos {2, 4, 4, 4, 4}
 		Si es a puerto 443:
-		Reenviar a servidor 2 o 3. Igual pesos.
+			Flujo a servidor 2 o 3. Pesos {2, 3}
 	Si es UDP:
-		No hacer nada extra de l2_learning
+		Sólo imprimir conexión UDP.
 	Si es ICMP:
-		Balanceo independiente, pero configurado igual que HTTP, pues lo 
-		esperado es que los clientes hagan ping para ver si la web está activa.
-	Resto:
-		"Delegar" en l2_learning
+		Flujo a servidores 1 a 3. Pesos {1, 1, 2, 3}.
+Resto:
+	"Delegar" en l2_learning
 \end{BVerbatim}
+
+En el ARP REQUEST sólo se reenvía el paquete pues no se sabe qué tipo tráfico quiere iniciar el cliente, y además puede iniciar más de uno que no vaya al mismo servidor. Por ello, se realiza un proxy con la mac de los servidores según cada tipo de flujo IP definido antes, independientemente de la dirección mac por la que pregunte el cliente.
+
+\hfill
+
+En el fichero \textit{balanceo.py} está todo el código del balanceador, y en este pdf explico el más representativo y no repetitivo:
+
+Primero tenemos el balanceo con pesos. Para cada servicio un contador, un array de pesos y una función que devuelve el número del servidor (indicado dentro del array) elegido por round robin. El peso y número de servidores elegibles para el servicio se establece únicamente en el array, de modo que reajustar el balanceo es cambiar una línea de código.
 
 \begin{lstlisting}[language=Python]
 self.rrweb = 0
@@ -430,6 +439,9 @@ def roundRobin(self):
 	self.round_robin+=1
 	return rr
 \end{lstlisting}
+
+
+Luego tenemos un par de métodos \textit{flowToSrv} y \textit{flowToCli} casi idénticos: instalan en el switch del \textit{event} un flujo para el tipo de servicio TCP o ICMP añadiendo en las acciones la regla de cambiar la MAC del servidor (como destino u origen) por la elegida en round robin (cuando el flujo viene del cliente), o por la que el cliente preguntó (en el flujo desde el servidor), es decir, la MAC que aprendió por ARP y que se almacena en un mapa como el macToPort de l2\_learning.py.
 
 \begin{lstlisting}[language=Python]
 #Instala flujo con proxy mac del srv desde un cliente
@@ -452,6 +464,7 @@ def flowToSrv(srv, tp_port = None, ipProto = ipv4.TCP_PROTOCOL):
 	self.connection.send(msg)
 \end{lstlisting}
 
+La detección del tipo de flujo, primero hay que cerciorarse de que estamos en el switch 2, y que el paquete se envía a la dirección IP de los servidores. En ese caso es un flujo desde los clientes, se debe guardar la MAC por la que pregunta y llamar a \textit{flowToSrv()}.
 
 \begin{lstlisting}[language=Python]
 # DETECCION DE FLUJOS
@@ -477,6 +490,7 @@ if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
 \end{lstlisting}
 
 
+En caso de no ser un flujo hacia los servidores, se comprueba que sea una respuesta de ellos, de modo que se llama a \textit{flowToCli()} recuperando la MAC por la que ese cliente preguntó, y con la que hay que deshacer el proxy mac.
 
 \begin{lstlisting}[language=Python]
 [...]
@@ -491,7 +505,7 @@ elif ipP.srcip == "10.0.0.101": # Flujo de vuelta desde el servidor
 		elif tcpP.dstport==443: # HTTPS
 \end{lstlisting}
 
-
+Finalmente, si no es un paquete IP, se comprueba que sea un ARP hacia los servidores, se aplica el mismo round robin que en la parte inicial de la práctica y sólo se reenvía el paquete, con \textit{self.connection.send(msg)}, no se crea un flujo en el switch, pues entonces no se podrían balancear los siguientes mensajes IP.
 
 \begin{lstlisting}[language=Python]
 [...]
