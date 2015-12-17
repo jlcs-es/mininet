@@ -259,16 +259,16 @@ class LearningSwitch (object):
         elif ipP.srcip == "10.0.0.101": # Flujo de vuelta desde el servidor
           if ipP.protocol==ipv4.TCP_PROTOCOL:
             tcpP = ipP.next
-            if tcpP.dstport==80: # HTTP
+            if tcpP.srcport==80: # HTTP
               print "Srv HTTP reply: srv=", packet.src
               #Paso la mac por la que preguntó el cliente, para deshacer proxy mac
               flowToCli(self.macToSrvWeb[packet.dst], tp_port = 80)
               return
-            elif tcpP.dstport==443: # HTTPS
+            elif tcpP.srcport==443: # HTTPS
               print "Srv HTTPS reply: srv=", packet.src
               flowToCli(self.macToSrvWebS[packet.dst], tp_port = 443)
               return
-            elif tcpP.dstport==22: # SSH
+            elif tcpP.srcport==22: # SSH
               print "Srv SSH reply: srv=", packet.src
               flowToCli(self.macToSrvSsh[packet.dst], tp_port = 22)
               return

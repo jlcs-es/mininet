@@ -477,7 +477,7 @@ if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
 				tcpP = ipP.next
 				if tcpP.dstport==80: # HTTP
 					print "Conexion HTTP"
-					#Calcular por round robin balanceado el 
+					#Calcular por round robin balanceado el
 					#servidor a reenviar el trafico
 					srv = self.rr_web()
 					#Guardamos por que mac preguntaba el cliente antes de aplicar proxy
@@ -492,17 +492,19 @@ if dpid_to_str(event.dpid) == "00-00-00-00-00-02":
 
 En caso de no ser un flujo hacia los servidores, se comprueba que sea una respuesta de ellos, de modo que se llama a \textit{flowToCli()} recuperando la MAC por la que ese cliente preguntó, y con la que hay que deshacer el proxy mac.
 
+Corregido ya el problema inicial en la entrevista donde comprobaba el dstport en vez de srcport.
+
 \begin{lstlisting}[language=Python]
 [...]
 elif ipP.srcip == "10.0.0.101": # Flujo de vuelta desde el servidor
 	if ipP.protocol==ipv4.TCP_PROTOCOL:
 		tcpP = ipP.next
-		if tcpP.dstport==80: # HTTP
+		if tcpP.srcport==80: # HTTP
 			print "Srv HTTP reply: srv=", packet.src
 			#Paso la mac por la que pregunto el cliente, para deshacer proxy mac
 			flowToCli(self.macToSrvWeb[packet.dst], tp_port = 80)
 			return
-		elif tcpP.dstport==443: # HTTPS
+		elif tcpP.srcport==443: # HTTPS
 \end{lstlisting}
 
 Finalmente, si no es un paquete IP, se comprueba que sea un ARP hacia los servidores, se aplica el mismo round robin que en la parte inicial de la práctica y sólo se reenvía el paquete, con \textit{self.connection.send(msg)}, no se crea un flujo en el switch, pues entonces no se podrían balancear los siguientes mensajes IP.
